@@ -14,6 +14,10 @@ import java.util.Arrays;
 import static com.google.common.base.Preconditions.checkPositionIndexes;
 import static java.nio.ByteOrder.LITTLE_ENDIAN;
 import static java.util.Objects.requireNonNull;
+import static com.xiexy.base.utils.DataUnit.BYTE_UNIT;
+import static com.xiexy.base.utils.DataUnit.SHORT_UNIT;
+import static com.xiexy.base.utils.DataUnit.INT_UNIT;
+import static com.xiexy.base.utils.DataUnit.LONG_UNIT;
 
 /**
  * Slice is a simple structure containing a pointer into some external
@@ -29,10 +33,13 @@ public final class Slice {
     private int hash;
     public Slice(){
         this.data = new byte[0];
+        this.offset = 0;
         this.length = 0;
     }
     public Slice(String s){
+        requireNonNull(s, "String is null");
         this.data = s.getBytes();
+        this.offset = 0;
         this.length = s.length();
     }
 
@@ -59,49 +66,62 @@ public final class Slice {
         this.length = length;
     }
 
-    // Return the length (in bytes) of the referenced data
+    /**
+     * Return the length (in bytes) of the referenced data
+     * */
     public int length()
     {
         return length;
     }
 
-    // Return a pointer to the beginning of the referenced data
+    /**
+     * Return a pointer to the beginning of the referenced data
+     * */
     public byte[] getData()
     {
         return data;
     }
 
-    // Return true iff the length of the referenced data is zero
+    /**
+     * Return true iff the length of the referenced data is zero
+     * */
     public boolean empty(){
         return this.length == 0;
     }
     /**
      * Gets the offset of this slice in the underlying array.
      */
-    public int getRawOffset()
+    public int getOffset()
     {
         return offset;
     }
 
     /**
      * Gets a byte at the specified absolute {@code index} in this buffer.
-     *
-     * @throws IndexOutOfBoundsException if the specified {@code index} is less than {@code 0} or
-     * {@code index + 1} is greater than {@code this.capacity}
+     * @throws IndexOutOfBoundsException
      */
     public byte getByte(int index)
     {
-        checkPositionIndexes(index, index + SIZE_OF_BYTE, this.length);
+        checkPositionIndexes(index, index + BYTE_UNIT, this.length);
         index += offset;
         return data[index];
     }
 
     /**
-     * Gets an unsigned byte at the specified absolute {@code index} in this
-     * buffer.
+     * Gets an unsigned byte at the specified absolute {@code index} in this buffer.
      *
-     * @throws IndexOutOfBoundsException if the specified {@code index} is less than {@code 0} or
-     * {@code index + 1} is greater than {@code this.capacity}
+     * Java中所有的byte类型都是signed类型。只能表达（-128，127）.而此处的代码为了读取像素值，
+     * 所需要的值是（0，255），所以需要的是unsigned byte而不是signed byte。
+     * 通过将byte声明为short或者int类型。然后与0xFF取&。即可将signed byte转为unsigned byte。
+     * 0xff 表示为二进制就是 1111 1111。在signed byte类型中，代表-1；但在short或者int类型中则代表255.
+     * 当把byte类型的-1赋值到short或者int类型时，虽然值仍然代表-1，但却由1111 1111变成1111 1111 1111 1111.
+     * 再将其与0xff进行掩码：
+     * -1: 11111111 1111111
+     * 0xFF: 00000000 1111111
+     * 255: 00000000 1111111
+     * 所以这样，-1就转换成255.
+     *
+     * @throws IndexOutOfBoundsException
      */
     public short getUnsignedByte(int index)
     {
@@ -110,14 +130,18 @@ public final class Slice {
 
     /**
      * Gets a 16-bit short integer at the specified absolute {@code index} in
-     * this slice.
+     * this buffer.
      *
-     * @throws IndexOutOfBoundsException if the specified {@code index} is less than {@code 0} or
-     * {@code index + 2} is greater than {@code this.capacity}
+     * 知识点：
+     * Leveldb对于数字的存储是little-endian的，在把int32或者int64转换为char*的函数中，
+     * 是按照先低位再高位的顺序存放的，也就是little-endian的。所以，这里先要把高位左移8位，
+     * 再与低位做或运算。
+     *
+     * @throws IndexOutOfBoundsException
      */
     public short getShort(int index)
     {
-        checkPositionIndexes(index, index + SIZE_OF_SHORT, this.length);
+        checkPositionIndexes(index, index + SHORT_UNIT, this.length);
         index += offset;
         return (short) (data[index] & 0xFF | data[index + 1] << 8);
     }
@@ -126,12 +150,11 @@ public final class Slice {
      * Gets a 32-bit integer at the specified absolute {@code index} in
      * this buffer.
      *
-     * @throws IndexOutOfBoundsException if the specified {@code index} is less than {@code 0} or
-     * {@code index + 4} is greater than {@code this.capacity}
+     * @throws IndexOutOfBoundsException
      */
     public int getInt(int index)
     {
-        checkPositionIndexes(index, index + SIZE_OF_INT, this.length);
+        checkPositionIndexes(index, index + INT_UNIT, this.length);
         index += offset;
         return (data[index] & 0xff) |
                 (data[index + 1] & 0xff) << 8 |
@@ -143,12 +166,11 @@ public final class Slice {
      * Gets a 64-bit long integer at the specified absolute {@code index} in
      * this buffer.
      *
-     * @throws IndexOutOfBoundsException if the specified {@code index} is less than {@code 0} or
-     * {@code index + 8} is greater than {@code this.capacity}
+     * @throws IndexOutOfBoundsException
      */
     public long getLong(int index)
     {
-        checkPositionIndexes(index, index + SIZE_OF_LONG, this.length);
+        checkPositionIndexes(index, index + LONG_UNIT, this.length);
         index += offset;
         return ((long) data[index] & 0xff) |
                 ((long) data[index + 1] & 0xff) << 8 |
