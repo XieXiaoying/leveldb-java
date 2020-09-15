@@ -53,7 +53,7 @@ public final class Slice {
 
     public Slice(int length)
     {
-        data = new byte[length];
+        this.data = new byte[length];
         this.offset = 0;
         this.length = length;
     }
@@ -71,7 +71,7 @@ public final class Slice {
      * */
     public int length()
     {
-        return length;
+        return this.length;
     }
 
     /**
@@ -79,7 +79,7 @@ public final class Slice {
      * */
     public byte[] getData()
     {
-        return data;
+        return this.data;
     }
 
     /**
@@ -93,7 +93,7 @@ public final class Slice {
      */
     public int getOffset()
     {
-        return offset;
+        return this.offset;
     }
 
     /**
@@ -103,8 +103,8 @@ public final class Slice {
     public byte getByte(int index)
     {
         checkPositionIndexes(index, index + BYTE_UNIT, this.length);
-        index += offset;
-        return data[index];
+        index += this.offset;
+        return this.data[index];
     }
 
     /**
@@ -142,8 +142,8 @@ public final class Slice {
     public short getShort(int index)
     {
         checkPositionIndexes(index, index + SHORT_UNIT, this.length);
-        index += offset;
-        return (short) (data[index] & 0xFF | data[index + 1] << 8);
+        index += this.offset;
+        return (short) (this.data[index] & 0xFF | this.data[index + 1] << 8);
     }
 
     /**
@@ -156,10 +156,10 @@ public final class Slice {
     {
         checkPositionIndexes(index, index + INT_UNIT, this.length);
         index += offset;
-        return (data[index] & 0xff) |
-                (data[index + 1] & 0xff) << 8 |
-                (data[index + 2] & 0xff) << 16 |
-                (data[index + 3] & 0xff) << 24;
+        return (this.data[index] & 0xff) |
+                (this.data[index + 1] & 0xff) << 8 |
+                (this.data[index + 2] & 0xff) << 16 |
+                (this.data[index + 3] & 0xff) << 24;
     }
 
     /**
@@ -172,14 +172,14 @@ public final class Slice {
     {
         checkPositionIndexes(index, index + LONG_UNIT, this.length);
         index += offset;
-        return ((long) data[index] & 0xff) |
-                ((long) data[index + 1] & 0xff) << 8 |
-                ((long) data[index + 2] & 0xff) << 16 |
-                ((long) data[index + 3] & 0xff) << 24 |
-                ((long) data[index + 4] & 0xff) << 32 |
-                ((long) data[index + 5] & 0xff) << 40 |
-                ((long) data[index + 6] & 0xff) << 48 |
-                ((long) data[index + 7] & 0xff) << 56;
+        return ((long) this.data[index] & 0xff) |
+                ((long) this.data[index + 1] & 0xff) << 8 |
+                ((long) this.data[index + 2] & 0xff) << 16 |
+                ((long) this.data[index + 3] & 0xff) << 24 |
+                ((long) this.data[index + 4] & 0xff) << 32 |
+                ((long) this.data[index + 5] & 0xff) << 40 |
+                ((long) this.data[index + 6] & 0xff) << 48 |
+                ((long) this.data[index + 7] & 0xff) << 56;
     }
 
 //    /**
@@ -630,8 +630,8 @@ public final class Slice {
      * */
     public int starts_with(Slice slice) {
         for (int i = 0; i < slice.length; i++) {
-            if (data[offset + i] != slice.data[offset + i]) {
-                return 0xFF & data[offset + i] - 0xFF & slice.data[i];
+            if (this.data[offset + i] != slice.data[offset + i]) {
+                return 0xFF & this.data[this.offset + i] - 0xFF & slice.data[i];
             }
         }
         return 0;
@@ -649,16 +649,16 @@ public final class Slice {
         Slice slice = (Slice) o;
 
         // do lengths match
-        if (length != slice.length) {
+        if (this.length != slice.length) {
             return false;
         }
 
         // if arrays have same base offset, some optimizations can be taken...
-        if (offset == slice.offset && data == slice.data) {
+        if (offset == slice.offset && this.data == slice.data) {
             return true;
         }
-        for (int i = 0; i < length; i++) {
-            if (data[offset + i] != slice.data[slice.offset + i]) {
+        for (int i = 0; i < this.length; i++) {
+            if (this.data[this.offset + i] != slice.data[slice.offset + i]) {
                 return false;
             }
         }
@@ -668,24 +668,24 @@ public final class Slice {
     @Override
     public int hashCode()
     {
-        if (hash != 0) {
-            return hash;
+        if (this.hash != 0) {
+            return this.hash;
         }
 
-        int result = length;
+        int result = this.length;
         /**
          * 之所以使用 31， 是因为他是一个奇素数。如果乘数是偶数，并且乘法溢出的话，信息就会丢失，因为与2相乘等价于移位运算（低位补0）。
          * 使用素数的好处并不很明显，但是习惯上使用素数来计算散列结果。 31 有个很好的性能，即用移位和减法来代替乘法，
          * 可以得到更好的性能： 31 * i == (i << 5） - i， 现代的 VM 可以自动完成这种优化。这个公式可以很简单的推导出来。
          * */
-        for (int i = offset; i < offset + length; i++) {
-            result = 31 * result + data[i];
+        for (int i = this.offset; i < this.offset + this.length; i++) {
+            result = 31 * result + this.data[i];
         }
         if (result == 0) {
             result = 1;
         }
-        hash = result;
-        return hash;
+        this.hash = result;
+        return this.hash;
     }
 
     /**
