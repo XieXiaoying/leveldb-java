@@ -1,5 +1,6 @@
 package com.xiexy.base.include;
 
+import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import static com.google.common.base.Equivalence.equals;
 public class Status {
@@ -10,6 +11,7 @@ public class Status {
      *  state_[5..]  == message
      * */
     private byte[] state_;
+    private int size_;
     private Code code(){
         if(this.state_ == null) return Code.kOk;
         for(Code code : Code.values()){
@@ -24,6 +26,7 @@ public class Status {
             int len1 = msg1.length();
             int len2 = msg2.length();
             int size = len1 + (len2 > 0 ? (2 + len2) : 0);
+            this.size_ = size;
             /**
              * 这里源码是+5，因为在c++中，一个char占1字节，源码增加了':'和' '两个char,
              * if (len2) {
@@ -32,18 +35,23 @@ public class Status {
              *     std::memcpy(result + 7 + len1, msg2.data(), len2);
              *   }
              *   java中一个char占两个字节，因此不能直接将char转换为byte，因为':'字符的二进制表示为00111010,
-             *   ' '字符的二进制表示为00100000
+             *   ' '字符的二进制表示为00100000，所以需要在前面补0
              * */
-            byte[] result = new byte[size + 5];
+            byte[] result = new byte[size + 7];
             result[0] = (byte)(size >>> 8);
             result[1] = (byte)(size >>> 16);
             result[2] = (byte)(size >>> 24);
             result[3] = (byte)(size >>> 32);
             result[4] = (byte)(code.getCode() & 0xFF);
+            System.arraycopy(msg1.getData(), 0, result, 5, len1);
             if(len2 > 0){
-                result[5] = (byte)58;
-                result[6] = (byte)32;
+                result[5 + len1] = (byte)0;
+                result[6 + len1] = (byte)58;
+                result[7 + len1] = (byte)0;
+                result[8 + len1] = (byte)32;
+                System.arraycopy(msg2.getData(), 0, result, len1 +7, len2);
             }
+            state_ = result;
         }
     }
 
@@ -51,16 +59,11 @@ public class Status {
         return (byte[]) Arrays.copyOf(s,s.length);
     }
 
-    @Override
-    public String toString(){
-        equivalent()
-    }
     public Status(){
         super();
         this.state_ = null;
     }
     public Status(Code code, Slice msg){
-        super(code, msg);
     }
     public Status(Status rhs){
         rhs.state_ = null;
@@ -118,8 +121,43 @@ public class Status {
      * */
     boolean IsInvalidArgument() { return code() == Code.kInvalidArgument; }
 
-    // Return a string representation of this status suitable for printing.
-    // Returns the string "OK" for success.
+     /**
+      * Return a string representation of this status suitable for printing.
+      * Returns the string "OK" for success.
+      * */
+    public String toString() {
+        if (state_ == null) {
+            return "OK";
+        }
+        String type;
+        switch (code()) {
+            case kOk:
+                type = "OK";
+                break;
+            case kNotFound:
+                type = "NotFound: ";
+                break;
+            case kCorruption:
+                type = "Corruption: ";
+                break;
+            case kNotSupported:
+                type = "Not implemented: ";
+                break;
+            case kInvalidArgument:
+                type = "Invalid argument: ";
+                break;
+            case kIOError:
+                type = "IO error: ";
+                break;
+            default:
+                type = "Unknown code(" + code() + ")";
+                break;
+        }
+        StringBuffer result = new StringBuffer(type);
+        String temp = new String(state_, 5, size_, StandardCharsets.UTF_8);
+        result.append(temp);
+        return result.toString();
+    }
 }
 
 
