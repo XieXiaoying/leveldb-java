@@ -182,45 +182,45 @@ public final class Slice {
                 ((long) this.data[index + 7] & 0xff) << 56;
     }
 
-//    /**
-//     * Transfers this buffer's data to the specified destination starting at
-//     * the specified absolute {@code index}.
-//     *
-//     * @param dstIndex the first index of the destination
-//     * @param length the number of bytes to transfer
-//     * @throws IndexOutOfBoundsException if the specified {@code index} is less than {@code 0},
-//     * if the specified {@code dstIndex} is less than {@code 0},
-//     * if {@code index + length} is greater than
-//     * {@code this.capacity}, or
-//     * if {@code dstIndex + length} is greater than
-//     * {@code dst.capacity}
-//     */
-//    public void getBytes(int index, Slice dst, int dstIndex, int length)
-//    {
-//        getBytes(index, dst.data, dstIndex, length);
-//    }
-//
-//    /**
-//     * Transfers this buffer's data to the specified destination starting at
-//     * the specified absolute {@code index}.
-//     *
-//     * @param destinationIndex the first index of the destination
-//     * @param length the number of bytes to transfer
-//     * @throws IndexOutOfBoundsException if the specified {@code index} is less than {@code 0},
-//     * if the specified {@code dstIndex} is less than {@code 0},
-//     * if {@code index + length} is greater than
-//     * {@code this.capacity}, or
-//     * if {@code dstIndex + length} is greater than
-//     * {@code dst.length}
-//     */
-//    public void getBytes(int index, byte[] destination, int destinationIndex, int length)
-//    {
-//        checkPositionIndexes(index, index + length, this.length);
-//        checkPositionIndexes(destinationIndex, destinationIndex + length, destination.length);
-//        index += offset;
-//        System.arraycopy(data, index, destination, destinationIndex, length);
-//    }
-//
+    /**
+     * Transfers this buffer's data to the specified destination starting at
+     * the specified absolute {@code index}.
+     *
+     * @param dstIndex the first index of the destination
+     * @param length the number of bytes to transfer
+     * @throws IndexOutOfBoundsException if the specified {@code index} is less than {@code 0},
+     * if the specified {@code dstIndex} is less than {@code 0},
+     * if {@code index + length} is greater than
+     * {@code this.capacity}, or
+     * if {@code dstIndex + length} is greater than
+     * {@code dst.capacity}
+     */
+    public void getBytes(int index, Slice dst, int dstIndex, int length)
+    {
+        getBytes(index, dst.data, dstIndex, length);
+    }
+
+    /**
+     * Transfers this buffer's data to the specified destination starting at
+     * the specified absolute {@code index}.
+     *
+     * @param destinationIndex the first index of the destination
+     * @param length the number of bytes to transfer
+     * @throws IndexOutOfBoundsException if the specified {@code index} is less than {@code 0},
+     * if the specified {@code dstIndex} is less than {@code 0},
+     * if {@code index + length} is greater than
+     * {@code this.capacity}, or
+     * if {@code dstIndex + length} is greater than
+     * {@code dst.length}
+     */
+    public void getBytes(int index, byte[] destination, int destinationIndex, int length)
+    {
+        checkPositionIndexes(index, index + length, this.length);
+        checkPositionIndexes(destinationIndex, destinationIndex + length, destination.length);
+        index += offset;
+        System.arraycopy(data, index, destination, destinationIndex, length);
+    }
+
 //    public byte[] getBytes()
 //    {
 //        return getBytes(0, length);
