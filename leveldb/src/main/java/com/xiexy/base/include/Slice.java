@@ -11,6 +11,7 @@ import java.nio.channels.ScatteringByteChannel;
 import java.nio.charset.Charset;
 import java.util.Arrays;
 
+import static com.google.common.base.Preconditions.checkPositionIndex;
 import static com.google.common.base.Preconditions.checkPositionIndexes;
 import static java.nio.ByteOrder.LITTLE_ENDIAN;
 import static java.util.Objects.requireNonNull;
@@ -183,17 +184,7 @@ public final class Slice {
     }
 
     /**
-     * Transfers this buffer's data to the specified destination starting at
-     * the specified absolute {@code index}.
-     *
-     * @param dstIndex the first index of the destination
-     * @param length the number of bytes to transfer
-     * @throws IndexOutOfBoundsException if the specified {@code index} is less than {@code 0},
-     * if the specified {@code dstIndex} is less than {@code 0},
-     * if {@code index + length} is greater than
-     * {@code this.capacity}, or
-     * if {@code dstIndex + length} is greater than
-     * {@code dst.capacity}
+     * 把当前数据复制到目标Slice中
      */
     public void getBytes(int index, Slice dst, int dstIndex, int length)
     {
@@ -201,17 +192,7 @@ public final class Slice {
     }
 
     /**
-     * Transfers this buffer's data to the specified destination starting at
-     * the specified absolute {@code index}.
-     *
-     * @param destinationIndex the first index of the destination
-     * @param length the number of bytes to transfer
-     * @throws IndexOutOfBoundsException if the specified {@code index} is less than {@code 0},
-     * if the specified {@code dstIndex} is less than {@code 0},
-     * if {@code index + length} is greater than
-     * {@code this.capacity}, or
-     * if {@code dstIndex + length} is greater than
-     * {@code dst.length}
+     * 把当前数据复制到目标Slice中
      */
     public void getBytes(int index, byte[] destination, int destinationIndex, int length)
     {
@@ -221,76 +202,66 @@ public final class Slice {
         System.arraycopy(data, index, destination, destinationIndex, length);
     }
 
-//    public byte[] getBytes()
-//    {
-//        return getBytes(0, length);
-//    }
-//
-//    public byte[] getBytes(int index, int length)
-//    {
-//        index += offset;
-//        if (index == 0) {
-//            return Arrays.copyOf(data, length);
-//        }
-//        else {
-//            byte[] value = new byte[length];
-//            System.arraycopy(data, index, value, 0, length);
-//            return value;
-//        }
-//    }
-//
-//    /**
-//     * Transfers this buffer's data to the specified destination starting at
-//     * the specified absolute {@code index} until the destination's position
-//     * reaches its limit.
-//     *
-//     * @throws IndexOutOfBoundsException if the specified {@code index} is less than {@code 0} or
-//     * if {@code index + dst.remaining()} is greater than
-//     * {@code this.capacity}
-//     */
-//    public void getBytes(int index, ByteBuffer destination)
-//    {
-//        checkPositionIndex(index, this.length);
-//        index += offset;
-//        destination.put(data, index, Math.min(length, destination.remaining()));
-//    }
-//
-//    /**
-//     * Transfers this buffer's data to the specified stream starting at the
-//     * specified absolute {@code index}.
-//     *
-//     * @param length the number of bytes to transfer
-//     * @throws IndexOutOfBoundsException if the specified {@code index} is less than {@code 0} or
-//     * if {@code index + length} is greater than
-//     * {@code this.capacity}
-//     * @throws java.io.IOException if the specified stream threw an exception during I/O
-//     */
-//    public void getBytes(int index, OutputStream out, int length)
-//            throws IOException
-//    {
-//        checkPositionIndexes(index, index + length, this.length);
-//        index += offset;
-//        out.write(data, index, length);
-//    }
-//
-//    /**
-//     * Transfers this buffer's data to the specified channel starting at the
-//     * specified absolute {@code index}.
-//     *
-//     * @param length the maximum number of bytes to transfer
-//     * @return the actual number of bytes written out to the specified channel
-//     * @throws IndexOutOfBoundsException if the specified {@code index} is less than {@code 0} or
-//     * if {@code index + length} is greater than
-//     * {@code this.capacity}
-//     * @throws java.io.IOException if the specified channel threw an exception during I/O
-//     */
-//    public int getBytes(int index, GatheringByteChannel out, int length)
-//            throws IOException
-//    {
-//        checkPositionIndexes(index, index + length, this.length);
-//        index += offset;
-//        return out.write(ByteBuffer.wrap(data, index, length));
-//    }
+    public byte[] getBytes()
+    {
+        return getBytes(0, length);
+    }
+
+    /**
+     * 返回byte[]类型的书籍
+     * */
+    public byte[] getBytes(int index, int length)
+    {
+        index += offset;
+        if (index == 0) {
+            return Arrays.copyOf(data, length);
+        }
+        else {
+            byte[] value = new byte[length];
+            System.arraycopy(data, index, value, 0, length);
+            return value;
+        }
+    }
+
+    /**
+     * 将数据写入ByteBuffer
+     */
+    public void getBytes(int index, ByteBuffer destination)
+    {
+        checkPositionIndex(index, this.length);
+        index += offset;
+        destination.put(data, index, Math.min(length, destination.remaining()));
+    }
+
+    /**
+     * 将数据写入OutputStream
+     */
+    public void getBytes(int index, OutputStream out, int length)
+            throws IOException
+    {
+        checkPositionIndexes(index, index + length, this.length);
+        index += offset;
+        out.write(data, index, length);
+    }
+
+    /**
+     * Transfers this buffer's data to the specified channel starting at the
+     * specified absolute {@code index}.
+     *
+     * @param length the maximum number of bytes to transfer
+     * @return the actual number of bytes written out to the specified channel
+     * @throws IndexOutOfBoundsException if the specified {@code index} is less than {@code 0} or
+     * if {@code index + length} is greater than
+     * {@code this.capacity}
+     * @throws java.io.IOException if the specified channel threw an exception during I/O
+     */
+    public int getBytes(int index, GatheringByteChannel out, int length)
+            throws IOException
+    {
+        checkPositionIndexes(index, index + length, this.length);
+        index += offset;
+        return out.write(ByteBuffer.wrap(data, index, length));
+    }
 //
 //    /**
 //     * Sets the specified 16-bit short integer at the specified absolute
