@@ -313,7 +313,7 @@ public final class Slice {
     }
 
     /**
-     * copy Slice
+     * 复制 Slice
      */
     public void setBytes(int index, Slice src, int srcIndex, int length)
     {
@@ -321,7 +321,8 @@ public final class Slice {
     }
 
     /**
-     * copy Slice
+     * 复制 Slice
+     * 因为java中的对象都是通过引用进行操作的，数组也是一种引用，因此不用返回对象，copy操作的返回值是void就行
      */
     public void setBytes(int index, byte[] source, int sourceIndex, int length)
     {
@@ -334,6 +335,9 @@ public final class Slice {
     /**
      *ByteBuffer.remaining() 返回limit - position;返回limit和position之间相对位置差
      * https://blog.csdn.net/u010659877/article/details/108864125这篇文章有什么是limit position
+     *
+     * 从position位置开始相对读，读length个byte，并写入dst下标从offset到offset+length的区域
+     * get(byte[] dst, int offset, int length)
      */
     public void setBytes(int index, ByteBuffer source)
     {
@@ -343,7 +347,20 @@ public final class Slice {
     }
 
     /**
-     * 返回InputStream中指定长度的数据
+     * 将InputStream的数据写入到Slice的data中
+     * @return 写入的字节数
+     * InputStream.read(byte[] b,int off,int len)
+     * 将输入流中最多 len 个数据字节读入字节数组。尝试读取多达 len 字节，但可能读取较少数量。以整数形式返回实际读取的字节数。
+     * 在输入数据可用、检测到流的末尾或者抛出异常前，此方法一直阻塞。
+     * 类 InputStream 的 read(b, off, len) 方法只重复调用方法 read()。读取输入流的下一个字节，返回一个0-255之间的int类型整数。
+     * 如果第一个这样的调用导致 IOException，则从对 read(b, off, len) 方法的调用中返回该异常。
+     * 参数：
+     *      b - 读入数据的缓冲区。
+     *      off - 在其处写入数据的数组 b 的初始偏移量。
+     *      len - 要读取的最大字节数。
+     * 返回：
+     *      读入缓冲区的总字节数，如果由于已到达流末尾而不再有数据，则返回 -1。
+     *
      */
     public int setBytes(int index, InputStream in, int length)
             throws IOException
