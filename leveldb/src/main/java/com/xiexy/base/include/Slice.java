@@ -388,7 +388,9 @@ public final class Slice {
     }
 
     /**
-     * 返回ScatteringByteChannel中指定长度的数据
+     * 将 ScatteringByteChannel的数据写入到Slice中，具体的read方法在下方链接处
+     * https://blog.csdn.net/u010659877/article/details/108983748
+     * ByteBuffer.wrap是将byte[]的一部分包装成ByteBuffer，
      */
     public int setBytes(int index, ScatteringByteChannel in, int length)
             throws IOException
@@ -424,7 +426,7 @@ public final class Slice {
     }
 
     /**
-     * 返回FileChannel中指定长度的数据
+     * FileChannel是ScatteringByteChannel的具体实现
      */
     public int setBytes(int index, FileChannel in, int position, int length)
             throws IOException
@@ -499,10 +501,7 @@ public final class Slice {
     }
 
     /**
-     * Returns a slice of this buffer's readable bytes. Modifying the content
-     * of the returned buffer or this buffer affects each other's content
-     * while they maintain separate indexes and marks.
-     */
+     * 返回Slice
     public Slice slice()
     {
         return slice(0, length);
@@ -532,13 +531,13 @@ public final class Slice {
         return new SliceInput(this);
     }
 
-//    /**
-//     * Creates an output stream over this slice.
-//     */
-//    public SliceOutput output()
-//    {
-//        return new BasicSliceOutput(this);
-//    }
+    /**
+     * Creates an output stream over this slice.
+     */
+    public SliceOutput output()
+    {
+        return new BasicSliceOutput(this);
+    }
 
     /**
      * 将Slice中的数据转换为ByteBuffer
@@ -549,8 +548,7 @@ public final class Slice {
     }
 
     /**
-     * Converts this buffer's sub-region into a NIO buffer.  The returned
-     * buffer shares the content with this buffer.
+     * 将Slice的部分数据转为NIO buffer，返回的buffer与Slice共享同一个对象，其中一个改变了，另一个也会改变。
      */
     public ByteBuffer toByteBuffer(int index, int length)
     {
@@ -558,17 +556,6 @@ public final class Slice {
         index += offset;
         return ByteBuffer.wrap(data, index, length).order(LITTLE_ENDIAN);
     }
-//    /**
-//     * Return true iff "x" is a prefix of "*this"
-//     * */
-//    public int starts_with(Slice slice) {
-//        for (int i = 0; i < slice.length; i++) {
-//            if (this.data[offset + i] != slice.data[offset + i]) {
-//                return 0xFF & this.data[this.offset + i] - 0xFF & slice.data[i];
-//            }
-//        }
-//        return 0;
-//    }
     @Override
     public boolean equals(Object o)
     {
@@ -581,15 +568,16 @@ public final class Slice {
 
         Slice slice = (Slice) o;
 
-        // do lengths match
+        // 长度比较
         if (this.length != slice.length) {
             return false;
         }
 
-        // if arrays have same base offset, some optimizations can be taken...
+        //偏移量和data比较
         if (offset == slice.offset && this.data == slice.data) {
             return true;
         }
+        // data逐位比较
         for (int i = 0; i < this.length; i++) {
             if (this.data[this.offset + i] != slice.data[slice.offset + i]) {
                 return false;
@@ -622,9 +610,11 @@ public final class Slice {
     }
 
     /**
-     * Compares the content of the specified buffer to the content of this
-     * buffer.  This comparison is performed byte by byte using an unsigned
-     * comparison.
+     * 先比较是不是同一个对象，对象的数据、长度、偏移量，都一致的时候返回0
+     * 上述不一致的情况下，选择较小的长度，对data进行逐位比较，优先返回第一个不相同的字符差
+     * 如果都相同，返回长度差
+     * 这里有个小知识，byte转int的方法：
+     * byte & 0xFF可以得到int
      */
     public int compareTo(Slice that)
     {
@@ -665,6 +655,14 @@ public final class Slice {
 
         return Slices.decodeString(toByteBuffer(index, length), charset);
     }
-
+    /**
+     * 返回长度信息
+     */
+    public String toString()
+    {
+        return getClass().getSimpleName() + '(' +
+                "length=" + length() +
+                ')';
+    }
 
 }
