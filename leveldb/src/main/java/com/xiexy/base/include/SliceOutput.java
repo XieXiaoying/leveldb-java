@@ -12,25 +12,22 @@ import java.nio.charset.Charset;
 public abstract class SliceOutput extends OutputStream
         implements DataOutput {
     /**
-     * Resets this stream to the initial position.
+     * 设置流的位置为起始位置
      */
     public abstract void reset();
 
     /**
-     * Returns the {@code writerIndex} of this buffer.
+     * 返回当前buffer的index
      */
     public abstract int size();
 
     /**
-     * Returns the number of writable bytes which is equal to
-     * {@code (this.capacity - this.writerIndex)}.
+     * 返回可写的byte数量，等于buffer的容量-当前index
      */
     public abstract int writableBytes();
 
     /**
-     * Returns {@code true}
-     * if and only if {@code (this.capacity - this.writerIndex)} is greater
-     * than {@code 0}.
+     * 可写的byte数量大于0.返回true，否则返回false
      */
     public abstract boolean isWritable();
 
@@ -47,40 +44,33 @@ public abstract class SliceOutput extends OutputStream
     }
 
     /**
-     * Sets the specified byte at the current {@code writerIndex}
-     * and increases the {@code writerIndex} by {@code 1} in this buffer.
-     * The 24 high-order bits of the specified value are ignored.
-     *
-     * @throws IndexOutOfBoundsException if {@code this.writableBytes} is less than {@code 1}
+     * 在指定的位置写入int值，int占4字节，共4 * 8 = 32位，但是一个byte只有8位，所以int的高24位会被忽略
+     * 写完之后index+1
+     * @throws IndexOutOfBoundsException 如果可写的byte数量 < 1
      */
     @Override
     public abstract void writeByte(int value);
 
     /**
-     * Sets the specified 16-bit short integer at the current
-     * {@code writerIndex} and increases the {@code writerIndex} by {@code 2}
-     * in this buffer.  The 16 high-order bits of the specified value are ignored.
-     *
-     * @throws IndexOutOfBoundsException if {@code this.writableBytes} is less than {@code 2}
+     * 在指定的位置写入int值，int占4字节，共4 * 8 = 32位，但是一个short只有16位，所以int的高16位会被忽略
+     * 写完之后index+2
+     * @throws IndexOutOfBoundsException 如果可写的byte数量 < 2
      */
     @Override
     public abstract void writeShort(int value);
 
     /**
-     * Sets the specified 32-bit integer at the current {@code writerIndex}
-     * and increases the {@code writerIndex} by {@code 4} in this buffer.
-     *
-     * @throws IndexOutOfBoundsException if {@code this.writableBytes} is less than {@code 4}
+     * 在指定的位置写入int值，int占4字节
+     * 写完之后index+4
+     * @throws IndexOutOfBoundsException 如果可写的byte数量 < 4
      */
     @Override
     public abstract void writeInt(int value);
 
     /**
-     * Sets the specified 64-bit long integer at the current
-     * {@code writerIndex} and increases the {@code writerIndex} by {@code 8}
-     * in this buffer.
-     *
-     * @throws IndexOutOfBoundsException if {@code this.writableBytes} is less than {@code 8}
+     * 在指定的位置写入long值，long占8字节
+     * 写完之后index+8
+     * @throws IndexOutOfBoundsException 如果可写的byte数量 < 8
      */
     @Override
     public abstract void writeLong(long value);
