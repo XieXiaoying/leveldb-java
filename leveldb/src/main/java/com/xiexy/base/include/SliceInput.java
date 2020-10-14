@@ -1,5 +1,7 @@
 package com.xiexy.base.include;
 
+import com.xiexy.base.db.Slices;
+
 import java.io.DataInput;
 import java.io.IOException;
 import java.io.InputStream;
@@ -21,7 +23,7 @@ public final class SliceInput
     }
 
     /**
-     * Returns the {@code position} of this buffer.
+     * 返回缓存数据的索引 {@code position}
      */
     public int position()
     {
@@ -29,11 +31,9 @@ public final class SliceInput
     }
 
     /**
-     * Sets the {@code position} of this buffer.
+     * 设置缓存数据的索引 {@code position}
      *
-     * @throws IndexOutOfBoundsException if the specified {@code position} is
-     * less than {@code 0} or
-     * greater than {@code this.writerIndex}
+     * @throws IndexOutOfBoundsException
      */
     public void setPosition(int position)
     {
@@ -44,9 +44,7 @@ public final class SliceInput
     }
 
     /**
-     * Returns {@code true}
-     * if and only if {@code available()} is greater
-     * than {@code 0}.
+     * 如果可读的字节数大于0，证明该SliceInput可读，返回 {@code true}
      */
     public boolean isReadable()
     {
@@ -54,8 +52,7 @@ public final class SliceInput
     }
 
     /**
-     * Returns the number of readable bytes which is equal to
-     * {@code (this.slice.length() - this.position)}.
+     * 返回可读的byte数量，为 {@code (this.slice.length() - this.position)}.
      */
     @Override
     public int available()
@@ -63,6 +60,11 @@ public final class SliceInput
         return slice.length() - position;
     }
 
+    /***
+     * 将该位byte转为boolean返回
+     * @return Boolean
+     * @throws IOException
+     */
     @Override
     public boolean readBoolean()
             throws IOException
@@ -70,6 +72,10 @@ public final class SliceInput
         return readByte() != 0;
     }
 
+    /**
+     * 默认读取字节，转为int返回
+     * @return int
+     */
     @Override
     public int read()
     {
@@ -77,10 +83,9 @@ public final class SliceInput
     }
 
     /**
-     * Gets a byte at the current {@code position} and increases
-     * the {@code position} by {@code 1} in this buffer.
+     * 都当前position的一个byte，position往后指一位，{@code 1}加一
      *
-     * @throws IndexOutOfBoundsException if {@code this.available()} is less than {@code 1}
+     * @throws IndexOutOfBoundsException
      */
     @Override
     public byte readByte()
@@ -92,10 +97,9 @@ public final class SliceInput
     }
 
     /**
-     * Gets an unsigned byte at the current {@code position} and increases
-     * the {@code position} by {@code 1} in this buffer.
+     * 将该位作为无符号字节返回，byte & 0xFF可将字节转为无符号字节，用int表示
      *
-     * @throws IndexOutOfBoundsException if {@code this.available()} is less than {@code 1}
+     * @throws IndexOutOfBoundsException
      */
     @Override
     public int readUnsignedByte()
@@ -104,10 +108,9 @@ public final class SliceInput
     }
 
     /**
-     * Gets a 16-bit short integer at the current {@code position}
-     * and increases the {@code position} by {@code 2} in this buffer.
+     * 在当前索引 {@code position} 处读2字节作为short， {@code position} + 2
      *
-     * @throws IndexOutOfBoundsException if {@code this.available()} is less than {@code 2}
+     * @throws IndexOutOfBoundsException
      */
     @Override
     public short readShort()
@@ -117,6 +120,11 @@ public final class SliceInput
         return v;
     }
 
+    /**
+     *
+     * @return 返回无符号的short，返回类型为int
+     * @throws IOException
+     */
     @Override
     public int readUnsignedShort()
             throws IOException
@@ -125,10 +133,9 @@ public final class SliceInput
     }
 
     /**
-     * Gets a 32-bit integer at the current {@code position}
-     * and increases the {@code position} by {@code 4} in this buffer.
+     * @return 32位的int，@{code position} + 4
      *
-     * @throws IndexOutOfBoundsException if {@code this.available()} is less than {@code 4}
+     * @throws IndexOutOfBoundsException
      */
     @Override
     public int readInt()
@@ -139,10 +146,9 @@ public final class SliceInput
     }
 
     /**
-     * Gets an unsigned 32-bit integer at the current {@code position}
-     * and increases the {@code position} by {@code 4} in this buffer.
+     * 返回32位的无符号int，无符号int只能用long来表示，否则位数不够，因为32位都要用老表示值
      *
-     * @throws IndexOutOfBoundsException if {@code this.available()} is less than {@code 4}
+     * @throws IndexOutOfBoundsException
      */
     public long readUnsignedInt()
     {
@@ -150,8 +156,7 @@ public final class SliceInput
     }
 
     /**
-     * Gets a 64-bit integer at the current {@code position}
-     * and increases the {@code position} by {@code 8} in this buffer.
+     * @return 64位的long，@{code position} + 8
      *
      * @throws IndexOutOfBoundsException if {@code this.available()} is less than {@code 8}
      */
@@ -163,6 +168,10 @@ public final class SliceInput
         return v;
     }
 
+    /**
+     * 返回@param length长度的数组
+     * @return
+     */
     public byte[] readByteArray(int length)
     {
         byte[] value = slice.copyBytes(position, length);
@@ -171,14 +180,10 @@ public final class SliceInput
     }
 
     /**
-     * Transfers this buffer's data to a newly created buffer starting at
-     * the current {@code position} and increases the {@code position}
-     * by the number of the transferred bytes (= {@code length}).
-     * The returned buffer's {@code position} and {@code writerIndex} are
-     * {@code 0} and {@code length} respectively.
+     * 将缓存的数据从{@code position}新建一个长度为{@code length}的副本，将{@code position}向后移length位
      *
-     * @param length the number of bytes to transfer
-     * @return the newly created buffer which contains the transferred bytes
+     * @param length 新的Slice的长度
+     * @return 新的Slice，偏移量就是原来的偏移量
      * @throws IndexOutOfBoundsException if {@code length} is greater than {@code this.available()}
      */
     public Slice readBytes(int length)
@@ -192,13 +197,11 @@ public final class SliceInput
     }
 
     /**
-     * Returns a new slice of this buffer's sub-region starting at the current
-     * {@code position} and increases the {@code position} by the size
-     * of the new slice (= {@code length}).
+     * 将缓存的数据从{@code position}新建一个长度为{@code length}的副本，将{@code position}向后移length位
      *
-     * @param length the size of the new slice
-     * @return the newly created slice
-     * @throws IndexOutOfBoundsException if {@code length} is greater than {@code this.available()}
+     * @param length 新的Slice的长度
+     * @return 新的Slice，偏移量就是原来的偏移量
+     * @throws IndexOutOfBoundsException
      */
     public Slice readSlice(int length)
     {

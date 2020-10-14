@@ -76,6 +76,7 @@ public abstract class SliceOutput extends OutputStream
     public abstract void writeLong(long value);
 
     /**
+     * 将指定的source 缓存中的数据写入到Slice中，
      * Transfers the specified source buffer's data to this buffer starting at
      * the current {@code writerIndex} until the source buffer becomes
      * unreadable, and increases the {@code writerIndex} by the number of
