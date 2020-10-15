@@ -70,7 +70,7 @@ public final class Slice {
     }
 
     /**
-     * Return the length (in bytes) of the referenced data
+     * 返回数据长度，以byte计算
      * */
     public int length()
     {
@@ -78,7 +78,7 @@ public final class Slice {
     }
 
     /**
-     * Return a pointer to the beginning of the referenced data
+     * 返回数据的头指针
      * */
     public byte[] getData()
     {
@@ -86,13 +86,13 @@ public final class Slice {
     }
 
     /**
-     * Return true iff the length of the referenced data is zero
+     * 判断数据是否为空
      * */
     public boolean empty(){
         return this.length == 0;
     }
     /**
-     * Gets the offset of this slice in the underlying array.
+     * 返回数据的偏移量
      */
     public int getOffset()
     {
@@ -100,7 +100,7 @@ public final class Slice {
     }
 
     /**
-     * Gets a byte at the specified absolute {@code index} in this buffer.
+     * 返回指定index的byte
      * @throws IndexOutOfBoundsException
      */
     public byte getByte(int index)
@@ -111,10 +111,8 @@ public final class Slice {
     }
 
     /**
-     * Gets an unsigned byte at the specified absolute {@code index} in this buffer.
      *
-     * Java中所有的byte类型都是signed类型。只能表达（-128，127）.而此处的代码为了读取像素值，
-     * 所需要的值是（0，255），所以需要的是unsigned byte而不是signed byte。
+     * Java中所有的byte类型都是signed类型。只能表达（-128，127），signed byte可以表达（0，255）。
      * 通过将byte声明为short或者int类型。然后与0xFF取&。即可将signed byte转为unsigned byte。
      * 0xff 表示为二进制就是 1111 1111。在signed byte类型中，代表-1；但在short或者int类型中则代表255.
      * 当把byte类型的-1赋值到short或者int类型时，虽然值仍然代表-1，但却由1111 1111变成1111 1111 1111 1111.
@@ -132,8 +130,7 @@ public final class Slice {
     }
 
     /**
-     * Gets a 16-bit short integer at the specified absolute {@code index} in
-     * this buffer.
+     * 返回16位的short，@param index 索引位置
      *
      * 知识点：
      * Leveldb对于数字的存储是little-endian的，在把int32或者int64转换为char*的函数中，
@@ -150,8 +147,7 @@ public final class Slice {
     }
 
     /**
-     * Gets a 32-bit integer at the specified absolute {@code index} in
-     * this buffer.
+     * 返回32位的int，@param index 索引位置
      *
      * @throws IndexOutOfBoundsException
      */
@@ -166,8 +162,7 @@ public final class Slice {
     }
 
     /**
-     * Gets a 64-bit long integer at the specified absolute {@code index} in
-     * this buffer.
+     * 返回64位的long，@param index 索引位置
      *
      * @throws IndexOutOfBoundsException
      */
@@ -210,7 +205,7 @@ public final class Slice {
     }
 
     /**
-     * 返回byte[]类型的书籍
+     * 返回byte[]类型的数据
      * */
     public byte[] getBytes(int index, int length)
     {
@@ -226,7 +221,7 @@ public final class Slice {
     }
 
     /**
-     * 将数据写入ByteBuffer
+     * 将数据写入ByteBuffer，这里因为ByteBuffer是对象，都是通过引用来实现的，因此并不需要返回对象本身
      */
     public void getBytes(int index, ByteBuffer destination)
     {
@@ -236,7 +231,7 @@ public final class Slice {
     }
 
     /**
-     * 将数据写入OutputStream
+     * 将数据写入OutputStream，这里因为OutputStream是对象，都是通过引用来实现的，因此并不需要返回对象本身
      */
     public void getBytes(int index, OutputStream out, int length)
             throws IOException
@@ -248,10 +243,14 @@ public final class Slice {
 
     /**
      * https://blog.csdn.net/u010659877/article/details/108864125
-     * 在我的这篇博客中，介绍了NIO的原理，其中有个概念叫channel，是双向的通道，将channel注册到Selector上，就可以基于NIIO进行
-     * IO操作，这里GatheringByteChannel是一个接口，实现类有DatagramChannel， FileChannel， Pipe.SinkChannel，
-     * SocketChannel，是一个用于从缓冲区写入字节的通道，有两个方法，wirte
-     *
+     * 在我的这篇博客中，介绍了NIO的原理，其中有个概念叫channel，是双向的通道，将channel注册到Selector上，就可以基于NIO进行
+     * IO操作，这里GatheringByteChannel是一个接口，实现类有DatagramChannel, FileChannel, Pipe.SinkChannel,
+     * SocketChannel，是一个用于从多个缓冲区写入的通道的接口，有两个方法：
+     * 具体原理参考我的博客：https://blog.csdn.net/u010659877/article/details/109012528
+     * 1. public long write(ByteBuffer[] srcs, int offset, int length) throws IOException;
+     * 2. public long write(ByteBuffer[] srcs) throws IOException;
+     * @return 写入的字节数 如果是-1，代表通道关闭
+     * 将数据写入GatheringByteChannel，这里因为GatheringByteChannel是对象，都是通过引用来实现的，因此并不需要返回对象本身
      */
     public int getBytes(int index, GatheringByteChannel out, int length)
             throws IOException
@@ -303,7 +302,7 @@ public final class Slice {
     }
 
     /**
-     * 将int中制定的某字节写入Slice
+     * 将int中指定的某字节写入Slice
      */
     public void setByte(int index, int value)
     {
@@ -358,8 +357,7 @@ public final class Slice {
      *      b - 读入数据的缓冲区。
      *      off - 在其处写入数据的数组 b 的初始偏移量。
      *      len - 要读取的最大字节数。
-     * 返回：
-     *      读入缓冲区的总字节数，如果由于已到达流末尾而不再有数据，则返回 -1。
+     * @return 写入缓冲区的总字节数，如果由于已到达流末尾而不再有数据，则返回 -1。
      *
      */
     public int setBytes(int index, InputStream in, int length)
@@ -391,6 +389,7 @@ public final class Slice {
      * 将 ScatteringByteChannel的数据写入到Slice中，具体的read方法在下方链接处
      * https://blog.csdn.net/u010659877/article/details/108983748
      * ByteBuffer.wrap是将byte[]的一部分包装成ByteBuffer，
+     * @return 写入缓冲区的总字节数，如果由于已到达流末尾而不再有数据，则返回 -1。
      */
     public int setBytes(int index, ScatteringByteChannel in, int length)
             throws IOException
@@ -502,6 +501,7 @@ public final class Slice {
 
     /**
      * 返回Slice
+     * */
     public Slice slice()
     {
         return slice(0, length);

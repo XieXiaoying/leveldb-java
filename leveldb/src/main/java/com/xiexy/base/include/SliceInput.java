@@ -1,5 +1,7 @@
 package com.xiexy.base.include;
 
+import com.xiexy.base.db.Slices;
+
 import java.io.DataInput;
 import java.io.IOException;
 import java.io.InputStream;
