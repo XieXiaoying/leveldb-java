@@ -210,7 +210,7 @@ public final class Slice {
     }
 
     /**
-     * 返回byte[]类型的书籍
+     * 返回byte[]类型的数据
      * */
     public byte[] getBytes(int index, int length)
     {

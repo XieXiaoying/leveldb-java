@@ -217,17 +217,18 @@ public final class SliceInput
     }
 
     /**
-     * Transfers this buffer's data to the specified destination starting at
-     * the current {@code position} and increases the {@code position}
-     * by the number of the transferred bytes (= {@code dst.length}).
-     *
-     * @throws IndexOutOfBoundsException if {@code dst.length} is greater than {@code this.available()}
+     * 将缓存的数据拷贝到destination数组中，从0到数组末尾读满
+     * @throws IndexOutOfBoundsException
      */
     public void readBytes(byte[] destination)
     {
         readBytes(destination, 0, destination.length);
     }
 
+    /**
+     * 将缓存的数据拷贝到destination数组中，拷贝的起始位置是position，目标数组的起始位置是offset，长度是length
+     * @throws IndexOutOfBoundsException
+     */
     @Override
     public void readFully(byte[] destination, int offset, int length)
     {
@@ -235,15 +236,9 @@ public final class SliceInput
     }
 
     /**
-     * Transfers this buffer's data to the specified destination starting at
-     * the current {@code position} and increases the {@code position}
-     * by the number of the transferred bytes (= {@code length}).
-     *
-     * @param destinationIndex the first index of the destination
-     * @param length the number of bytes to transfer
-     * @throws IndexOutOfBoundsException if the specified {@code destinationIndex} is less than {@code 0},
-     * if {@code length} is greater than {@code this.available()}, or
-     * if {@code destinationIndex + length} is greater than {@code destination.length}
+     * 将缓存的数据拷贝到destination数组中，拷贝的起始位置是position，目标数组的起始位置是destinationIndex，长度是length，
+     * position指针+length
+     * @throws IndexOutOfBoundsException
      */
     public void readBytes(byte[] destination, int destinationIndex, int length)
     {
@@ -252,17 +247,9 @@ public final class SliceInput
     }
 
     /**
-     * Transfers this buffer's data to the specified destination starting at
-     * the current {@code position} until the destination becomes
-     * non-writable, and increases the {@code position} by the number of the
-     * transferred bytes.  This method is basically same with
-     * {@link #readBytes(Slice, int, int)}, except that this method
-     * increases the {@code writerIndex} of the destination by the number of
-     * the transferred bytes while {@link #readBytes(Slice, int, int)}
-     * does not.
+     * 将缓存中的数据拷贝到目标Slice，即destination中，直到destination被写满，position增加destination.length()
      *
-     * @throws IndexOutOfBoundsException if {@code destination.writableBytes} is greater than
-     * {@code this.available()}
+     * @throws IndexOutOfBoundsException
      */
     public void readBytes(Slice destination)
     {
@@ -270,36 +257,22 @@ public final class SliceInput
     }
 
     /**
-     * Transfers this buffer's data to the specified destination starting at
-     * the current {@code position} and increases the {@code position}
-     * by the number of the transferred bytes (= {@code length}).  This method
-     * is basically same with {@link #readBytes(Slice, int, int)},
-     * except that this method increases the {@code writerIndex} of the
-     * destination by the number of the transferred bytes (= {@code length})
-     * while {@link #readBytes(Slice, int, int)} does not.
+     * 将缓存中的数据拷贝到目标Slice，即destination中，拷贝数据的长度为length，position增加length
      *
-     * @throws IndexOutOfBoundsException if {@code length} is greater than {@code this.available()} or
-     * if {@code length} is greater than {@code destination.writableBytes}
+     * @throws IndexOutOfBoundsException
      */
     public void readBytes(Slice destination, int length)
     {
         if (length > destination.length()) {
             throw new IndexOutOfBoundsException();
         }
-        readBytes(destination, destination.length(), length);
+        readBytes(destination, 0, length);
     }
 
     /**
-     * Transfers this buffer's data to the specified destination starting at
-     * the current {@code position} and increases the {@code position}
-     * by the number of the transferred bytes (= {@code length}).
+     * 将当前缓存中的数据拷贝到目标Slice中，Slice的offset是destinationIndex，拷贝字节长度为length，position =+ length
      *
-     * @param destinationIndex the first index of the destination
-     * @param length the number of bytes to transfer
-     * @throws IndexOutOfBoundsException if the specified {@code destinationIndex} is less than {@code 0},
-     * if {@code length} is greater than {@code this.available()}, or
-     * if {@code destinationIndex + length} is greater than
-     * {@code destination.capacity}
+     * @throws IndexOutOfBoundsException
      */
     public void readBytes(Slice destination, int destinationIndex, int length)
     {
@@ -308,13 +281,10 @@ public final class SliceInput
     }
 
     /**
-     * Transfers this buffer's data to the specified destination starting at
-     * the current {@code position} until the destination's position
-     * reaches its limit, and increases the {@code position} by the
-     * number of the transferred bytes.
+     * 将缓存中的数据写到目标ByteBuffer中，直到ByteBuffer被写满，position增加ByteBuffer的剩余长度，
+     * position + ByteBuffer的剩余长度
      *
-     * @throws IndexOutOfBoundsException if {@code destination.remaining()} is greater than
-     * {@code this.available()}
+     * @throws IndexOutOfBoundsException
      */
     public void readBytes(ByteBuffer destination)
     {
@@ -324,13 +294,10 @@ public final class SliceInput
     }
 
     /**
-     * Transfers this buffer's data to the specified stream starting at the
-     * current {@code position}.
-     *
-     * @param length the maximum number of bytes to transfer
-     * @return the actual number of bytes written out to the specified channel
-     * @throws IndexOutOfBoundsException if {@code length} is greater than {@code this.available()}
-     * @throws java.io.IOException if the specified channel threw an exception during I/O
+     * 将缓存中的数据写到目标GatheringByteChannel中，写的长度为length，position增加length
+     * @return 读到的字节数量
+     * @throws IndexOutOfBoundsException
+     * @throws java.io.IOException
      */
     public int readBytes(GatheringByteChannel out, int length)
             throws IOException
@@ -341,12 +308,10 @@ public final class SliceInput
     }
 
     /**
-     * Transfers this buffer's data to the specified stream starting at the
-     * current {@code position}.
+     * 将缓存中的数据写到目标OutputStream中，写的长度为length，position增加length
      *
-     * @param length the number of bytes to transfer
-     * @throws IndexOutOfBoundsException if {@code length} is greater than {@code this.available()}
-     * @throws java.io.IOException if the specified stream threw an exception during I/O
+     * @throws IndexOutOfBoundsException
+     * @throws java.io.IOException
      */
     public void readBytes(OutputStream out, int length)
             throws IOException
@@ -355,6 +320,11 @@ public final class SliceInput
         position += length;
     }
 
+    /**
+     * 跳过多少个字节，如果剩余可读字节数量小于要求跳过的字节数，则跳过Math.min(length, available());
+     * @param length 跳过字节数量
+     * @return 实际跳过的字节数
+     */
     public int skipBytes(int length)
     {
         length = Math.min(length, available());
@@ -413,13 +383,13 @@ public final class SliceInput
     }
 
     //
-    // Unsupported operations
+    // 不支持的操作类型
     //
 
     /**
-     * Unsupported operation
+     * 异常处理，不支持的操作类型
      *
-     * @throws UnsupportedOperationException always
+     * @throws UnsupportedOperationException 总是抛出该异常
      */
     @Override
     public char readChar()
@@ -428,9 +398,9 @@ public final class SliceInput
     }
 
     /**
-     * Unsupported operation
+     * 异常处理，不支持的操作类型
      *
-     * @throws UnsupportedOperationException always
+     * @throws UnsupportedOperationException 总是抛出该异常
      */
     @Override
     public float readFloat()
@@ -445,9 +415,9 @@ public final class SliceInput
     }
 
     /**
-     * Unsupported operation
+     * 异常处理，不支持的操作类型
      *
-     * @throws UnsupportedOperationException always
+     * @throws UnsupportedOperationException 总是抛出该异常
      */
     @Override
     public String readLine()
@@ -456,9 +426,9 @@ public final class SliceInput
     }
 
     /**
-     * Unsupported operation
+     * 异常处理，不支持的操作类型
      *
-     * @throws UnsupportedOperationException always
+     * @throws UnsupportedOperationException 总是抛出该异常
      */
     @Override
     public String readUTF()
