@@ -76,47 +76,29 @@ public abstract class SliceOutput extends OutputStream
     public abstract void writeLong(long value);
 
     /**
-     * 将指定的source 缓存中的数据写入到Slice中，
-     * Transfers the specified source buffer's data to this buffer starting at
-     * the current {@code writerIndex} until the source buffer becomes
-     * unreadable, and increases the {@code writerIndex} by the number of
-     * the transferred bytes.  This method is basically same with
-     * {@link #writeBytes(Slice, int, int)}, except that this method
-     * increases the {@code readerIndex} of the source buffer by the number of
-     * the transferred bytes while {@link #writeBytes(Slice, int, int)}
-     * does not.
+     * 将指定的source 缓存中的数据写入到Slice中，在目标Slice的index处开始写入，直到源Slice变为不可读，修改index位置。
+     * 该方法与 {@link #writeBytes(Slice, int, int)}相同，除了该方法index增加的数值由源Slice决定，而
+     * {@link #writeBytes(Slice, int, int)}由参数决定。
      *
-     * @throws IndexOutOfBoundsException if {@code source.readableBytes} is greater than
-     * {@code this.writableBytes}
+     * @throws IndexOutOfBoundsException 如果源Slice的可读byte数量大于目标Slice的剩余byte数
      */
     public abstract void writeBytes(Slice source);
 
     /**
-     * Transfers the specified source buffer's data to this buffer starting at
-     * the current {@code writerIndex} and increases the {@code writerIndex}
-     * by the number of the transferred bytes (= {@code length}).  This method
-     * is basically same with {@link #writeBytes(Slice, int, int)},
-     * except that this method increases the {@code readerIndex} of the source
-     * buffer by the number of the transferred bytes (= {@code length}) while
-     * {@link #writeBytes(Slice, int, int)} does not.
+     * 将指定的source 缓存中的数据写入到Slice中，在目标Slice的index处开始写入，共写入length个byte。
      *
-     * @param length the number of bytes to transfer
-     * @throws IndexOutOfBoundsException if {@code length} is greater than {@code this.writableBytes} or
-     * if {@code length} is greater then {@code source.readableBytes}
+     * @param length 写入byte的数量
+     * @throws IndexOutOfBoundsException 如果length大于目标Slice的剩余byte数 or length大于源Slice的剩余byte数
      */
     public abstract void writeBytes(SliceInput source, int length);
 
     /**
-     * Transfers the specified source buffer's data to this buffer starting at
-     * the current {@code writerIndex} and increases the {@code writerIndex}
-     * by the number of the transferred bytes (= {@code length}).
+     * 将指定的source 缓存中的数据写入到Slice中，从源source的sourceIndex开始写入，共写入length个byte。
      *
-     * @param sourceIndex the first index of the source
-     * @param length the number of bytes to transfer
-     * @throws IndexOutOfBoundsException if the specified {@code sourceIndex} is less than {@code 0},
-     * if {@code sourceIndex + length} is greater than
-     * {@code source.capacity}, or
-     * if {@code length} is greater than {@code this.writableBytes}
+     * @param sourceIndex 从源Slice的sourceIndex处开始写入
+     * @param length 写入byte的数量
+     * @throws IndexOutOfBoundsException 如果sourceIndex小于0 or {@code sourceIndex + length}大于source.data.length or
+     * {@code length}大于目标Slice的可写长度
      */
     public abstract void writeBytes(Slice source, int sourceIndex, int length);
 
@@ -128,11 +110,9 @@ public abstract class SliceOutput extends OutputStream
     }
 
     /**
-     * Transfers the specified source array's data to this buffer starting at
-     * the current {@code writerIndex} and increases the {@code writerIndex}
-     * by the number of the transferred bytes (= {@code source.length}).
+     * 将source数组的数据写入该Slice的data，从该Slice的index开始写入，index+=source.length
      *
-     * @throws IndexOutOfBoundsException if {@code source.length} is greater than {@code this.writableBytes}
+     * @throws IndexOutOfBoundsException 如果{@code index+source.length}大于目标Slice的可写长度
      */
     public abstract void writeBytes(byte[] source);
 
@@ -143,52 +123,41 @@ public abstract class SliceOutput extends OutputStream
     }
 
     /**
-     * Transfers the specified source array's data to this buffer starting at
-     * the current {@code writerIndex} and increases the {@code writerIndex}
-     * by the number of the transferred bytes (= {@code length}).
-     *
-     * @param sourceIndex the first index of the source
-     * @param length the number of bytes to transfer
-     * @throws IndexOutOfBoundsException if the specified {@code sourceIndex} is less than {@code 0},
-     * if {@code sourceIndex + length} is greater than
-     * {@code source.length}, or
-     * if {@code length} is greater than {@code this.writableBytes}
+     * 将source数组的数据写入该Slice的data，从该Slice的index开始写入，共写入length个字节，目的Slice的index+=length
+     * @param sourceIndex 从源Slice的sourceIndex开始写入
+     * @param length 写入的byte数量为length
+     * @throws IndexOutOfBoundsException 如果sourceIndex小于0 or {@code sourceIndex + length}大于source.length or
+     * length 小于目的Slice的可写字节数。
      */
     public abstract void writeBytes(byte[] source, int sourceIndex, int length);
 
     /**
-     * Transfers the specified source buffer's data to this buffer starting at
-     * the current {@code writerIndex} until the source buffer's position
-     * reaches its limit, and increases the {@code writerIndex} by the
-     * number of the transferred bytes.
+     * 将ByteBuffer的数据写入目标Slice，直到源ByteBuffer的position到了limit的位置。目标index+写入的byte数量。
+     * remaining = limit - position，关于Buffer的一些问题，请参照本篇博客：
+     * https://blog.csdn.net/u010659877/article/details/108864125
      *
-     * @throws IndexOutOfBoundsException if {@code source.remaining()} is greater than
-     * {@code this.writableBytes}
+     * @throws IndexOutOfBoundsException 如果{@code source.remaining()} 大于目标Slice的可写byte数量
      */
     public abstract void writeBytes(ByteBuffer source);
 
     /**
-     * Transfers the content of the specified stream to this buffer
-     * starting at the current {@code writerIndex} and increases the
-     * {@code writerIndex} by the number of the transferred bytes.
+     * 将InputStream的数据写入目标Slice。目标index+=length。
      *
-     * @param length the number of bytes to transfer
-     * @return the actual number of bytes read in from the specified stream
-     * @throws IndexOutOfBoundsException if {@code length} is greater than {@code this.writableBytes}
-     * @throws java.io.IOException if the specified stream threw an exception during I/O
+     * @param length 写入的byte数量
+     * @return 实际写入的byte数量
+     * @throws IndexOutOfBoundsException 如果 {@code length} 大于目的Slice的可写byte数量
+     * @throws java.io.IOException 如果InputStream抛出I/O异常
      */
     public abstract int writeBytes(InputStream in, int length)
             throws IOException;
 
     /**
-     * Transfers the content of the specified channel to this buffer
-     * starting at the current {@code writerIndex} and increases the
-     * {@code writerIndex} by the number of the transferred bytes.
+     * 将ScatteringByteChannel的数据写入到目标Slice中，最大写入byte数量为length
      *
-     * @param length the maximum number of bytes to transfer
-     * @return the actual number of bytes read in from the specified channel
-     * @throws IndexOutOfBoundsException if {@code length} is greater than {@code this.writableBytes}
-     * @throws java.io.IOException if the specified channel threw an exception during I/O
+     * @param length 最大可写数量
+     * @return 实际写入的字节数
+     * @throws IndexOutOfBoundsException 如果 {@code length} 大于目标Slice的可写字节数
+     * @throws java.io.IOException 如果ScatteringByteChannel在读的过程中抛出了I/O异常
      */
     public abstract int writeBytes(ScatteringByteChannel in, int length)
             throws IOException;
@@ -197,53 +166,38 @@ public abstract class SliceOutput extends OutputStream
             throws IOException;
 
     /**
-     * Fills this buffer with <tt>NUL (0x00)</tt> starting at the current
-     * {@code writerIndex} and increases the {@code writerIndex} by the
-     * specified {@code length}.
+     * 从该Slice的当前位置开始，填入length个0，index+=length
      *
-     * @param length the number of <tt>NUL</tt>s to write to the buffer
-     * @throws IndexOutOfBoundsException if {@code length} is greater than {@code this.writableBytes}
+     * @param length 写入的O的个数
+     * @throws IndexOutOfBoundsException 如果length大于该Slice的剩余可写byte数
      */
     public abstract void writeZero(int length);
 
     /**
-     * Returns a slice of this buffer's readable bytes. Modifying the content
-     * of the returned buffer or this buffer affects each other's content
-     * while they maintain separate indexes and marks.  This method is
-     * identical to {@code buf.slice(buf.readerIndex(), buf.readableBytes())}.
-     * This method does not modify {@code readerIndex} or {@code writerIndex} of
-     * this buffer.
+     * @ return Slice 返回一个Slice，返回的Slice的data是该Slice的data的浅拷贝，也就是说，修改返回的Slice的数据会造成
+     * 该Slice的数据的修改，但是返回的Slice维护自己独立的index和其他标志。
      */
     public abstract Slice slice();
 
     /**
-     * Converts this buffer's readable bytes into a NIO buffer.  The returned
-     * buffer might or might not share the content with this buffer, while
-     * they have separate indexes and marks.  This method is identical to
-     * {@code buf.toByteBuffer(buf.readerIndex(), buf.readableBytes())}.
-     * This method does not modify {@code readerIndex} or {@code writerIndex} of
-     * this buffer.
+     * 将该Slice的数据转换为ByteBuffer格式，返回的ByteBuffer的数据既可能是Slice数据的浅拷贝，也可能是深拷贝，但是他们维护各自
+     * 独立的index和标志。
      */
     public abstract ByteBuffer toByteBuffer();
 
     /**
-     * Decodes this buffer's readable bytes into a string with the specified
-     * character set name.  This method is identical to
-     * {@code buf.toString(buf.readerIndex(), buf.readableBytes(), charsetName)}.
-     * This method does not modify {@code readerIndex} or {@code writerIndex} of
-     * this buffer.
+     * 将该Buffer的数据以指定的字符集转换为String
      *
-     * @throws java.nio.charset.UnsupportedCharsetException if the specified character set name is not supported by the
-     * current VM
+     * @throws java.nio.charset.UnsupportedCharsetException 如果jvm不支持该字符集
      */
     public abstract String toString(Charset charset);
 
     //
-    // Unsupported operations
+    // 不支持的操作
     //
 
     /**
-     * Unsupported operation
+     * 不支持的操作
      *
      * @throws UnsupportedOperationException always
      */
@@ -254,7 +208,7 @@ public abstract class SliceOutput extends OutputStream
     }
 
     /**
-     * Unsupported operation
+     * 不支持的操作
      *
      * @throws UnsupportedOperationException always
      */
@@ -265,7 +219,7 @@ public abstract class SliceOutput extends OutputStream
     }
 
     /**
-     * Unsupported operation
+     * 不支持的操作
      *
      * @throws UnsupportedOperationException always
      */
@@ -276,7 +230,7 @@ public abstract class SliceOutput extends OutputStream
     }
 
     /**
-     * Unsupported operation
+     * 不支持的操作
      *
      * @throws UnsupportedOperationException always
      */
@@ -287,7 +241,7 @@ public abstract class SliceOutput extends OutputStream
     }
 
     /**
-     * Unsupported operation
+     * 不支持的操作
      *
      * @throws UnsupportedOperationException always
      */
@@ -298,7 +252,7 @@ public abstract class SliceOutput extends OutputStream
     }
 
     /**
-     * Unsupported operation
+     * 不支持的操作
      *
      * @throws UnsupportedOperationException always
      */
