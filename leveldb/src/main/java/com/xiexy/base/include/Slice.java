@@ -321,7 +321,7 @@ public final class Slice {
     }
 
     /**
-     * 复制 Slice
+     * 复制 Slice，深拷贝
      * 因为java中的对象都是通过引用进行操作的，数组也是一种引用，因此不用返回对象，copy操作的返回值是void就行
      */
     public void setBytes(int index, byte[] source, int sourceIndex, int length)
@@ -338,6 +338,8 @@ public final class Slice {
      *
      * 从position位置开始相对读，读length个byte，并写入dst下标从offset到offset+length的区域
      * get(byte[] dst, int offset, int length)
+     * for (int i = off; i < off + len; i++)
+     *     dst[i] = src.get();
      */
     public void setBytes(int index, ByteBuffer source)
     {

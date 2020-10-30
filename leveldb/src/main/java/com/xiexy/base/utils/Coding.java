@@ -1,0 +1,113 @@
+package com.xiexy.base.utils;
+
+import com.xiexy.base.include.SliceInput;
+import com.xiexy.base.include.SliceOutput;
+
+import java.nio.ByteBuffer;
+
+public class Coding {
+    // 因为都是静态函数，不允许创建该类的对象，因此把构造函数设为private
+    private Coding(){}
+
+    /**
+     * 有效位是7位byte，把int按7位分割
+     * @param value 待转码数字
+     * @return 转码后的字符长度
+     */
+    public static int varintLength(int value){
+        int size = 1;
+        while ((value & (~0x7f)) != 0) {
+            value >>>= 7;
+            size++;
+        }
+        return size;
+    }
+    public static int varintLength(long value){
+        int size = 1;
+        while ((value & (~0x7f)) != 0) {
+            value >>>= 7;
+            size++;
+        }
+        return size;
+    }
+    public static void encodeInt(int value, SliceOutput sliceOutput){
+        int highBitMask = 0x80;
+        if (value < (1 << 7) && value >= 0) {
+            sliceOutput.writeByte(value);
+        }
+        else if (value < (1 << 14) && value > 0) {
+            sliceOutput.writeByte(value | highBitMask);
+            sliceOutput.writeByte(value >>> 7);
+        }
+        else if (value < (1 << 21) && value > 0) {
+            sliceOutput.writeByte(value | highBitMask);
+            sliceOutput.writeByte((value >>> 7) | highBitMask);
+            sliceOutput.writeByte(value >>> 14);
+        }
+        else if (value < (1 << 28) && value > 0) {
+            sliceOutput.writeByte(value | highBitMask);
+            sliceOutput.writeByte((value >>> 7) | highBitMask);
+            sliceOutput.writeByte((value >>> 14) | highBitMask);
+            sliceOutput.writeByte(value >>> 21);
+        }
+        else {
+            sliceOutput.writeByte(value | highBitMask);
+            sliceOutput.writeByte((value >>> 7) | highBitMask);
+            sliceOutput.writeByte((value >>> 14) | highBitMask);
+            sliceOutput.writeByte((value >>> 21) | highBitMask);
+            sliceOutput.writeByte(value >>> 28);
+        }
+    }
+    public static void encodeLong(int value, SliceOutput sliceOutput){
+        while ((value & (~0x7f)) != 0) {
+            sliceOutput.writeByte((int) ((value & 0x7f) | 0x80));
+            value >>>= 7;
+        }
+        sliceOutput.writeByte((int) value);
+    }
+    public static int decodeInt(SliceInput sliceInput){
+        int result = 0;
+        for (int shift = 0; shift <= 28; shift += 7) {
+            int b = sliceInput.readUnsignedByte();
+
+            // 将后7位与result相加
+            result |= ((b & 0x7f) << shift);
+
+            // 如果没有设置高位，则证明这是数组中最后一个字节
+            if ((b & 0x80) == 0) {
+                return result;
+            }
+        }
+        throw new NumberFormatException("last byte of variable length int has high bit set");
+    }
+    public static long decodeLong(SliceInput sliceInput){
+        long result = 0;
+        for (int shift = 0; shift <= 63; shift += 7) {
+            long b = sliceInput.readUnsignedByte();
+
+            // 将后7位与result相加
+            result |= ((b & 0x7f) << shift);
+
+            // 如果没有设置高位，则证明这是数组中最后一个字节
+            if ((b & 0x80) == 0) {
+                return result;
+            }
+        }
+        throw new NumberFormatException("last byte of variable length int has high bit set");
+    }
+    public static int decodeInt(ByteBuffer sliceInput)
+    {
+        int result = 0;
+        for (int shift = 0; shift <= 28; shift += 7) {
+            int b = sliceInput.get();
+
+            result |= ((b & 0x7f) << shift);
+
+            if ((b & 0x80) == 0) {
+                return result;
+            }
+        }
+        throw new NumberFormatException("last byte of variable length int has high bit set");
+    }
+
+}

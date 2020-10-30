@@ -1,15 +1,149 @@
 package com.xiexy.base.db;
 
 import com.xiexy.base.include.Slice;
+import com.xiexy.base.include.SliceInput;
+import com.xiexy.base.include.SliceOutput;
+import com.xiexy.base.utils.Coding;
 
 import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.nio.CharBuffer;
 import java.nio.charset.*;
 import java.util.IdentityHashMap;
 import java.util.Map;
 
+import static java.util.Objects.requireNonNull;
+
+
 public class Slices {
+    /**
+     * 长度为0的缓存
+     */
     public static final Slice EMPTY_SLICE = new Slice(0);
+
+    public static Slice readLengthPrefixedBytes(SliceInput sliceInput)
+    {
+        int length = Coding.decodeInt(sliceInput);
+        return sliceInput.readBytes(length);
+    }
+
+    public static void writeLengthPrefixedBytes(SliceOutput sliceOutput, Slice value)
+    {
+        Coding.encodeInt(value.length(), sliceOutput);
+        sliceOutput.writeBytes(value);
+    }
+
+    private Slices()
+    {
+    }
+
+    /**
+     * 可确保容量至少等于指定的minimumCapacity，类似于StringBufferd的ensureCapacity()方法
+     *
+     * @param existingSlice 待确认capacity的Slice
+     * @param minWritableBytes 要保证的最小容量
+     * @return Slice
+     */
+    public static Slice ensureSize(Slice existingSlice, int minWritableBytes)
+    {
+        if (existingSlice == null) {
+            existingSlice = EMPTY_SLICE;
+        }
+        // 如果可读字节数小于Slice的长度，直接返回该Slice
+        if (minWritableBytes <= existingSlice.length()) {
+            return existingSlice;
+        }
+
+        int newCapacity;
+        if (existingSlice.length() == 0) {
+            newCapacity = 1;
+        }
+        else {
+            newCapacity = existingSlice.length();
+        }
+        int minNewCapacity = existingSlice.length() + minWritableBytes;
+        while (newCapacity < minNewCapacity) {
+            newCapacity <<= 1;
+        }
+
+        Slice newSlice = allocate(newCapacity);
+        newSlice.setBytes(0, existingSlice, 0, existingSlice.length());
+        return newSlice;
+    }
+
+    /**
+     * 分配一个新的字节缓冲区。新缓冲区的位置将为零，其界限将为其容量
+     * @param capacity 缓冲容量
+     * @return 新建的缓冲区
+     */
+    public static Slice allocate(int capacity)
+    {
+        if (capacity == 0) {
+            return EMPTY_SLICE;
+        }
+        return new Slice(capacity);
+    }
+
+    /**
+     * 将数据包装到缓冲区
+     * @param array Slice的data指针指向传入的数组，是浅拷贝
+     * @return Slice
+     */
+    public static Slice wrappedBuffer(byte[] array)
+    {
+        if (array.length == 0) {
+            return EMPTY_SLICE;
+        }
+        return new Slice(array);
+    }
+
+    /**
+     * 将ByteBuffer的数据写入到Slice中，深拷贝
+     * clear()方法不会真正的删除掉buffer中的数据，只是把position移动到最前面，同时把limit调整为capacity。源码：
+     * public final Buffer clear() {
+     *     position = 0;
+     *     limit = capacity;
+     *     mark = -1;
+     *     return this;
+     * }
+     * @param source 源缓存
+     * @param sourceOffset 源缓存偏移量
+     * @param length 读取缓存的长度
+     * @return 拷贝一份缓存
+     */
+    public static Slice copiedBuffer(ByteBuffer source, int sourceOffset, int length)
+    {
+        requireNonNull(source, "source is null");
+        int newPosition = source.position() + sourceOffset;
+        return copiedBuffer((ByteBuffer) source.duplicate().order(ByteOrder.LITTLE_ENDIAN).clear().limit(newPosition + length).position(newPosition));
+    }
+
+    /**
+     * 拷贝缓存，深拷贝
+     * @param source 源缓存
+     * @return 拷贝后的缓存
+     */
+    public static Slice copiedBuffer(ByteBuffer source)
+    {
+        requireNonNull(source, "source is null");
+        Slice copy = allocate(source.limit() - source.position());
+        copy.setBytes(0, source.duplicate().order(ByteOrder.LITTLE_ENDIAN));
+        return copy;
+    }
+
+    /**
+     * 将字符串按照指定的字符集存储到缓存中
+     * @param string 源字符串
+     * @param charset 字符集
+     * @return 包装成的缓存
+     */
+    public static Slice copiedBuffer(String string, Charset charset)
+    {
+        requireNonNull(string, "string is null");
+        requireNonNull(charset, "charset is null");
+
+        return wrappedBuffer(string.getBytes(charset));
+    }
 
     private static final ThreadLocal<Map<Charset, CharsetDecoder>> decoders =
             new ThreadLocal<Map<Charset, CharsetDecoder>>()

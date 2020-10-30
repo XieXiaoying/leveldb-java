@@ -333,12 +333,8 @@ public final class SliceInput
     }
 
     /**
-     * Returns a slice of this buffer's readable bytes. Modifying the content
-     * of the returned buffer or this buffer affects each other's content
-     * while they maintain separate indexes and marks.  This method is
-     * identical to {@code buf.slice(buf.position(), buf.available()())}.
-     * This method does not modify {@code position} or {@code writerIndex} of
-     * this buffer.
+     * 将该SliceInput转为Slice返回，SliceInput中缓存的数据与返回的Slice中缓存的数据是浅拷贝，修改值会相互影响
+     * 他们各自维护了自己的index
      */
     public Slice slice()
     {
@@ -346,12 +342,8 @@ public final class SliceInput
     }
 
     /**
-     * Converts this buffer's readable bytes into a NIO buffer.  The returned
-     * buffer might or might not share the content with this buffer, while
-     * they have separate indexes and marks.  This method is identical to
-     * {@code buf.toByteBuffer(buf.position(), buf.available()())}.
-     * This method does not modify {@code position} or {@code writerIndex} of
-     * this buffer.
+     * 将该SliceInput转换为ByteBuffer，ByteBuffer与该SliceInput共享缓存数据，修改值会互相影响
+     * 他们各自维护自己的index
      */
     public ByteBuffer toByteBuffer()
     {
@@ -359,14 +351,9 @@ public final class SliceInput
     }
 
     /**
-     * Decodes this buffer's readable bytes into a string with the specified
-     * character set name.  This method is identical to
-     * {@code buf.toString(buf.position(), buf.available()(), charsetName)}.
-     * This method does not modify {@code position} or {@code writerIndex} of
-     * this buffer.
+     * 将该缓存数据以指定字符集转化为String
      *
-     * @throws java.nio.charset.UnsupportedCharsetException if the specified character set name is not supported by the
-     * current VM
+     * @throws java.nio.charset.UnsupportedCharsetException 如果虚拟机不支持该字符集
      */
     public String toString(Charset charset)
     {
