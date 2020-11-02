@@ -5,6 +5,10 @@ import com.xiexy.base.include.SliceOutput;
 
 import java.nio.ByteBuffer;
 
+/**
+ * 变长存储，也就是VarInt。
+ * 对于VarInt，每byte的有效存储是7bit的，用最高的8bit位来表示是否结束，如果是1就表示后面还有一个byte的数字，否则表示结束。
+ */
 public class Coding {
     // 因为都是静态函数，不允许创建该类的对象，因此把构造函数设为private
     private Coding(){}

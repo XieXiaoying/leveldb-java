@@ -1,0 +1,95 @@
+package com.xiexy.base.table;
+
+import com.xiexy.base.db.Slices;
+import com.xiexy.base.include.Slice;
+
+import java.util.Comparator;
+
+import static com.google.common.base.Preconditions.checkArgument;
+import static com.xiexy.base.utils.DataUnit.INT_UNIT;
+import static java.util.Objects.requireNonNull;
+
+/**
+ * 非常好的源代码分析：https://blog.csdn.net/sparkliang/article/details/8635821
+ * 原代码中对于block的存储格式在table_format中做了详细描述：
+ * filter block is formatted as follows:
+ *
+ *     [filter 0]
+ *     [filter 1]
+ *     [filter 2]
+ *     ...
+ *     [filter N-1]
+ *
+ *     [offset of filter 0]                  : 4 bytes
+ *     [offset of filter 1]                  : 4 bytes
+ *     [offset of filter 2]                  : 4 bytes
+ *     ...
+ *     [offset of filter N-1]                : 4 bytes
+ *
+ *     [offset of beginning of offset array] : 4 bytes
+ *     lg(base)                              : 1 byte
+ *
+ * The offset array at the end of the filter block allows efficient
+ * mapping from a data block offset to the corresponding filter.
+ * block分为k/v存储区和后面的重启点存储区两部分
+ * 对于一个k/v对，其在block中的存储格式为：
+ * 共享前缀长度         shared_bytes:    varint32
+ * 前缀之后的字符串长度 unshared_bytes:  varint32
+ * 值的长度             value_length:     varint32
+ * 前缀之后的字符串     key_delta:        char[unshared_bytes]
+ * 值                   value:           char[value_length]
+ * 如下所示存储：
+ * shared_bytes | unshared_bytes | value_length | key_delta | value
+ */
+public class Block
+        implements SeekingIterable<Slice, Slice>
+{
+    private final Slice block;
+    private final Comparator<Slice> comparator;
+    // k/v存储区
+    private final Slice data;
+    //重启点存储区
+    private final Slice restartPositions;
+
+    public Block(Slice block, Comparator<Slice> comparator)
+    {
+
+        requireNonNull(block, "block is null");
+        checkArgument(block.length() >= INT_UNIT, "Block is corrupt: size must be at least %s block", INT_UNIT);
+        requireNonNull(comparator, "comparator is null");
+
+        block = block.slice();
+        this.block = block;
+        this.comparator = comparator;
+
+        /**
+         * leveldb中的key都是经过压缩的，重启点的第一个key是被写入的一个完整的key，这些重启点都是写在文件的开头，因此在查找key的
+         * 时候可以避免读整个文件。
+         * 最后的四个字节是重启点个数，获取重启点个数
+         */
+        int restartCount = block.getInt(block.length() - INT_UNIT);
+
+        if (restartCount > 0) {
+            // 根据重启点的个数，计算第一个重启点的位置
+            int restartOffset = block.length() - (1 + restartCount) * INT_UNIT;
+            checkArgument(restartOffset < block.length() - INT_UNIT, "Block is corrupt: restart offset count is greater than block size");
+            restartPositions = block.slice(restartOffset, restartCount * INT_UNIT);
+            data = block.slice(0, restartOffset);
+        }
+        else {
+            data = Slices.EMPTY_SLICE;
+            restartPositions = Slices.EMPTY_SLICE;
+        }
+    }
+
+    public long size()
+    {
+        return block.length();
+    }
+
+    @Override
+    public BlockIterator iterator()
+    {
+        return new BlockIterator(data, restartPositions, comparator);
+    }
+}
