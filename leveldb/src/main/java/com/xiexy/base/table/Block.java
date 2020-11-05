@@ -73,7 +73,9 @@ public class Block
             // 根据重启点的个数，计算第一个重启点的位置
             int restartOffset = block.length() - (1 + restartCount) * INT_UNIT;
             checkArgument(restartOffset < block.length() - INT_UNIT, "Block is corrupt: restart offset count is greater than block size");
+            // 从传入的Slice中解析重启点存储区
             restartPositions = block.slice(restartOffset, restartCount * INT_UNIT);
+            // 从传入的Slice中解析出k/v存储区
             data = block.slice(0, restartOffset);
         }
         else {

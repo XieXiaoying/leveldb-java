@@ -13,13 +13,16 @@ import static com.google.common.base.Preconditions.*;
 import static com.google.common.base.Preconditions.checkArgument;
 import static java.util.Objects.requireNonNull;
 
+
 public class BlockBuilder {
+    // blockRestartInterval记录每隔多少个数据，会有一个不压缩的前缀
     private final int blockRestartInterval;
     // 重启点
     private final IntVector restartPositions;
     private final Comparator<Slice> comparator;
-    // 重启后生成的entry数
+    // 存入的key-value对的个数
     private int entryCount;
+    // 重启点个数
     private int restartBlockEntryCount;
     // 是否构建完成
     private boolean finished;
@@ -42,7 +45,7 @@ public class BlockBuilder {
         // 第一个重启点必须是0
         restartPositions.add(0);
     }
-    // 重设内容，通常在Finish之后调用已构建新的block
+    // 重设内容，通常在Finish之后调用，来构建新的block
     public void reset()
     {
         block.reset();
@@ -64,22 +67,22 @@ public class BlockBuilder {
         return entryCount == 0;
     }
 
-    // 返回正在构建block的未压缩大小—估计值
+    // 返回正在构建block的未压缩大小（估计值）
     public int currentSizeEstimate()
     {
-        // no need to estimate if closed
+        // 如果构建已经结束，返回block的size
         if (finished) {
             return block.size();
         }
 
-        // no records is just a single int
+        // 如果block中还没有数据，则只有int的长度，这个int记录了重启点的个数，会在一开始被初始化为0
         if (block.size() == 0) {
             return INT_UNIT;
         }
 
-        return block.size() +                              // raw data buffer
-                restartPositions.size() * INT_UNIT +    // restart positions
-                INT_UNIT;                               // restart position size
+        return block.size() +                              // k/v存储区
+                restartPositions.size() * INT_UNIT +    // 重启点存储区
+                INT_UNIT;                               // 一个int标识了重启点的个数
     }
 
     public void add(BlockEntry blockEntry)
@@ -93,8 +96,9 @@ public class BlockBuilder {
         requireNonNull(key, "key is null");
         requireNonNull(value, "value is null");
         checkState(!finished, "block is finished");
+        // 判断block中存储的经过压缩的key是否大于等于要求的interval，如果大于等于，则抛出异常
         checkPositionIndex(restartBlockEntryCount, blockRestartInterval);
-
+        //如果key小于最后一个key，则抛出IllegalArgumentException异常
         checkArgument(lastKey == null || comparator.compare(key, lastKey) > 0, "key must be greater than last key");
 
         int sharedKeyBytes = 0;
@@ -102,32 +106,38 @@ public class BlockBuilder {
             sharedKeyBytes = calculateSharedBytes(key, lastKey);
         }
         else {
-            // restart prefix compression
+            // 如果压缩key的数据已经等于interval了，则需要重新开始计数
+            // 重置重启点为当前index，count为0
             restartPositions.add(block.size());
             restartBlockEntryCount = 0;
         }
 
         int nonSharedKeyBytes = key.length() - sharedKeyBytes;
 
-        // write "<shared><non_shared><value_size>"
+        // 根据下面的规则写入shared_bytes | unshared_bytes | value_length
+        // shared_bytes | unshared_bytes | value_length | key_delta | value
         Coding.encodeInt(sharedKeyBytes, block);
         Coding.encodeInt(nonSharedKeyBytes, block);
         Coding.encodeInt(value.length(), block);
 
-        // write non-shared key bytes
+        // 写入key
+        // 从sharedKeyBytes位开始写，共写nonSharedKeyBytes位，将key写入block
         block.writeBytes(key, sharedKeyBytes, nonSharedKeyBytes);
 
-        // write value bytes
+        // 写入value
         block.writeBytes(value, 0, value.length());
 
-        // update last key
+        // 更新lastkey
         lastKey = key;
 
-        // update state
+        // 更新状态
         entryCount++;
         restartBlockEntryCount++;
     }
 
+    /**
+     * 计算公共前缀的长度
+     */
     public static int calculateSharedBytes(Slice leftKey, Slice rightKey)
     {
         int sharedKeyBytes = 0;
@@ -151,6 +161,7 @@ public class BlockBuilder {
             finished = true;
 
             if (entryCount > 0) {
+                // 把重启点的数据写入block中，写入重启点的个数
                 restartPositions.write(block);
                 block.writeInt(restartPositions.size());
             }
@@ -158,6 +169,7 @@ public class BlockBuilder {
                 block.writeInt(0);
             }
         }
+        // 返回数据
         return block.slice();
     }
 }
