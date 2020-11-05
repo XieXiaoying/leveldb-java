@@ -352,9 +352,7 @@ public final class SliceInput
 
     /**
      * 返回该缓冲区剩余可读字节，该缓冲区和返回的缓冲区都引用同一个data对象，因此修改内容会互相影响，但是他们维护独立的index
-     * @retyrn String
-     *
-     * @throws java.nio.charset.UnsupportedCharsetException
+     * @throws java.nio.charset.UnsupportedCharsetException 如果虚拟机不支持该字符集
      */
     public String toString(Charset charset)
     {

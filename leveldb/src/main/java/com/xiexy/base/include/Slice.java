@@ -22,12 +22,7 @@ import static com.xiexy.base.utils.DataUnit.SHORT_UNIT;
 import static com.xiexy.base.utils.DataUnit.INT_UNIT;
 import static com.xiexy.base.utils.DataUnit.LONG_UNIT;
 
-/**
- * Slice is a simple structure containing a pointer into some external
- * storage and a size.  The user of a Slice must ensure that the slice
- * is not used after the corresponding external storage has been
- * deallocated.
- * */
+
 public final class Slice {
     private final byte[] data;
     private final int offset;
@@ -320,7 +315,7 @@ public final class Slice {
     }
 
     /**
-     * 复制 Slice
+     * 复制 Slice，深拷贝
      * 因为java中的对象都是通过引用进行操作的，数组也是一种引用，因此不用返回对象，copy操作的返回值是void就行
      */
     public void setBytes(int index, byte[] source, int sourceIndex, int length)
@@ -337,6 +332,8 @@ public final class Slice {
      *
      * 从position位置开始相对读，读length个byte，并写入dst下标从offset到offset+length的区域
      * get(byte[] dst, int offset, int length)
+     * for (int i = off; i < off + len; i++)
+     *     dst[i] = src.get();
      */
     public void setBytes(int index, ByteBuffer source)
     {
@@ -532,7 +529,7 @@ public final class Slice {
     }
 
     /**
-     * Creates an output stream over this slice.
+     * 创建该Slice的输出流
      */
     public SliceOutput output()
     {
