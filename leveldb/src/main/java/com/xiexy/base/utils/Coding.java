@@ -62,7 +62,7 @@ public class Coding {
             sliceOutput.writeByte(value >>> 28);
         }
     }
-    public static void encodeLong(int value, SliceOutput sliceOutput){
+    public static void encodeLong(long value, SliceOutput sliceOutput){
         while ((value & (~0x7f)) != 0) {
             sliceOutput.writeByte((int) ((value & 0x7f) | 0x80));
             value >>>= 7;

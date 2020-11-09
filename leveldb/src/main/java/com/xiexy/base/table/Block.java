@@ -11,6 +11,7 @@ import static com.xiexy.base.utils.DataUnit.INT_UNIT;
 import static java.util.Objects.requireNonNull;
 
 /**
+ * 这里的Block指的是源码中的data部分，剩余的5字节在BlockTrailer中，1字节是type（压缩类型），4字节是crc32
  * 非常好的源代码分析：https://blog.csdn.net/sparkliang/article/details/8635821
  * 原代码中对于block的存储格式在table_format中做了详细描述：
  * filter block is formatted as follows:
