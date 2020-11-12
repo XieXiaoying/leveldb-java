@@ -3,13 +3,25 @@ package com.xiexy.base.table;
 import com.xiexy.base.include.Slice;
 
 import java.util.Comparator;
-
+/**
+ * 这两个函数：用于减少像index blocks这样的内部数据结构占用的空间
+ */
 public interface UserComparator
         extends Comparator<Slice>
 {
     String name();
 
+    /**
+     * 这个函数的作用就是：如果start < limit，就在[start,limit)中找到一个短字符串，并赋给start返回
+     * 简单的comparator实现可能不改变start，这也是正确的
+     * @return 一个介于start和limit之间的短字符串
+     */
     Slice findShortestSeparator(Slice start, Slice limit);
 
+    /**
+     * 这个函数的作用就是：找一个>= key的短字符串，简单的comparator实现可能不改变key，这也是正确的
+     * @param key 参考key
+     * @return 大于等于key的字符串
+     */
     Slice findShortSuccessor(Slice key);
 }
