@@ -11,7 +11,14 @@ public final class TableIterator
         extends AbstractSeekingIterator<Slice, Slice>
 {
     private final Table table;
+    /**
+     * 各种Block的存储格式都是相同的，但是各自block data存储的k/v又互不相同，于是我们就需要一个途径，
+     * 能够在使用同一个方式遍历不同的block时，又能解析这些k/v。
+     */
     private final BlockIterator blockIterator;
+    /**
+     * 遍历block data的迭代器
+     */
     private BlockIterator current;
 
     public TableIterator(Table table, BlockIterator blockIterator)
@@ -24,7 +31,7 @@ public final class TableIterator
     @Override
     protected void seekToFirstInternal()
     {
-        // reset index to before first and clear the data iterator
+        // 重置index到data block的起始位置
         blockIterator.seekToFirst();
         current = null;
     }
@@ -32,12 +39,12 @@ public final class TableIterator
     @Override
     protected void seekInternal(Slice targetKey)
     {
-        // seek the index to the block containing the key
+        // 这里并不是精确的定位，而是在Table中找到第一个>=指定key的k/v对
         blockIterator.seek(targetKey);
 
-        // if indexIterator does not have a next, it mean the key does not exist in this iterator
+        // 如果iterator没有next，那么key不包含在iterator中
         if (blockIterator.hasNext()) {
-            // seek the current iterator to the key
+            // 找到current的迭代器
             current = getNextBlock();
             current.seek(targetKey);
         }
@@ -49,10 +56,6 @@ public final class TableIterator
     @Override
     protected Map.Entry<Slice, Slice> getNextElement()
     {
-        // note: it must be here & not where 'current' is assigned,
-        // because otherwise we'll have called inputs.next() before throwing
-        // the first NPE, and the next time around we'll call inputs.next()
-        // again, incorrectly moving beyond the error.
         boolean currentHasNext = false;
         while (true) {
             if (current != null) {

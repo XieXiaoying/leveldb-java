@@ -7,8 +7,7 @@ import java.util.Map;
 public interface SeekingIterator<K, V> extends PeekingIterator<Map.Entry<K, V>>
 {
     /**
-     * 下一个元素的key大于等于当前指定的key
-     * Repositions the iterator so the beginning of this block.
+     * 将迭代器重置到block的起始位置
      */
     void seekToFirst();
 
