@@ -61,7 +61,7 @@ public class BytewiseComparator implements UserComparator
     }
 
     /**
-     * 找一个>= key的短字符串
+     * 找一个>= key的短字符串,
      * @param key 参考key
      * @return >=key的短字符串
      */
