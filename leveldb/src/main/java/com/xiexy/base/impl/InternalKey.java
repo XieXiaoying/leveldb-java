@@ -22,6 +22,14 @@ import static java.nio.charset.StandardCharsets.UTF_8;
 import static java.util.Objects.requireNonNull;
 import static com.xiexy.base.utils.DataUnit.LONG_UNIT;
 
+/**
+ * InternalKey是由User key + SequenceNumber + ValueType组合而成的
+ * InternalKey的格式为：
+ * | User key (string) | sequence number (7 bytes) | value type (1 byte) |
+ * sequence number大小是7 bytes，sequence number是所有基于op log系统的关键数据，它唯一指定了不同操作的时间顺序。
+ * 把user key放到前面的原因是，这样对同一个user key的操作就可以按照sequence number顺序连续存放了，不同的user key是互不相干的，
+ * 因此把它们的操作放在一起也没有什么意义。
+ */
 public class InternalKey
 {
     private final Slice userKey;
@@ -44,6 +52,7 @@ public class InternalKey
         requireNonNull(data, "data is null");
         checkArgument(data.length() >= LONG_UNIT, "data must be at least %s bytes", LONG_UNIT);
         this.userKey = getUserKey(data);
+        // data 的最后8 byte是SequenceNumber和valueType的组合
         long packedSequenceAndType = data.getLong(data.length() - LONG_UNIT);
         this.sequenceNumber = SequenceNumber.unpackSequenceNumber(packedSequenceAndType);
         this.valueType = SequenceNumber.unpackValueType(packedSequenceAndType);

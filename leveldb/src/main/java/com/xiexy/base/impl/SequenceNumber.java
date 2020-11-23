@@ -18,14 +18,14 @@ import static java.util.Objects.requireNonNull;
 
 public final class SequenceNumber
 {
-    // We leave eight bits empty at the bottom so a type and sequence#
-    // can be packed together into 64-bits.
+    // SequenceNumber是Key的一部分，占 7 byte，ValueType占1byte，组合之后就是long
+    // ((0x1L << 56) - 1) 之后就可以获得最大的7 byte
     public static final long MAX_SEQUENCE_NUMBER = ((0x1L << 56) - 1);
 
     private SequenceNumber()
     {
     }
-
+    // 组合SequenceNumber和 ValueType
     public static long packSequenceAndValueType(long sequence, ValueType valueType)
     {
         checkArgument(sequence <= MAX_SEQUENCE_NUMBER, "Sequence number is greater than MAX_SEQUENCE_NUMBER");
@@ -33,12 +33,13 @@ public final class SequenceNumber
 
         return (sequence << 8) | valueType.getPersistentId();
     }
-
+    // 从long中拆出 ValueType
     public static ValueType unpackValueType(long num)
     {
         return ValueType.getValueTypeByPersistentId((byte) num);
     }
 
+    // 从long中拆出 SequenceNumber
     public static long unpackSequenceNumber(long num)
     {
         return num >>> 8;

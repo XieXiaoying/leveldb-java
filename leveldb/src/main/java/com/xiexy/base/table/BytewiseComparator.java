@@ -47,6 +47,8 @@ public class BytewiseComparator implements UserComparator
         if (sharedBytes < Math.min(start.length(), limit.length())) {
 
             int lastSharedByte = start.getUnsignedByte(sharedBytes);
+            // 尝试执行字符start[diff_index]++，设置start长度为diff_index+1，并返回
+            // ++条件：字符< oxff 并且字符+1 < limit上该index的字符
             if (lastSharedByte < 0xff && lastSharedByte + 1 < limit.getUnsignedByte(sharedBytes)) {
                 Slice result = start.copySlice(0, sharedBytes + 1);
                 result.setByte(sharedBytes, lastSharedByte + 1);
@@ -68,6 +70,9 @@ public class BytewiseComparator implements UserComparator
     public Slice findShortSuccessor(Slice key)
     {
         // 返回一个大于key短字符串
+        // 找到第一个可以++的字符，执行++后，截断字符串；
+        // 如果找不到说明*key的字符都是0xff啊，那就不作修改，直接返回
+
         for (int i = 0; i < key.length(); i++) {
             int b = key.getUnsignedByte(i);
             if (b != 0xff) {

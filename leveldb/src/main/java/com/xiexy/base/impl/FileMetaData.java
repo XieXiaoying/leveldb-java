@@ -2,8 +2,15 @@ package com.xiexy.base.impl;
 
 import java.util.concurrent.atomic.AtomicInteger;
 
+/**
+ * FileMetaData数据结构用来维护一个文件的元信息，包括文件大小，文件编号，最大最小值，引用计数等
+ * 其中引用计数记录了被不同的Version引用的个数，保证被引用中的文件不会被删除。
+ */
 public class FileMetaData
 {
+    /**
+     * 文件编号
+     */
     private final long number;
 
     /**
@@ -12,12 +19,12 @@ public class FileMetaData
     private final long fileSize;
 
     /**
-     * Smallest internal key served by table
+     * table的最小InternalKey
      */
     private final InternalKey smallest;
 
     /**
-     * Largest internal key served by table
+     * table的最大InternalKey
      */
     private final InternalKey largest;
 
