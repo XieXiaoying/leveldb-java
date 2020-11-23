@@ -29,18 +29,23 @@ public class BytewiseComparator implements UserComparator
         return sliceA.compareTo(sliceB);
     }
 
+    /**
+     * 如果start < limit，就在[start,limit)中找到一个短字符串，并赋给start返回
+     * @param start 起始的字符串
+     * @param limit 结束的字符串
+     * @return 返回的短字符串
+     */
     @Override
     public Slice findShortestSeparator(
             Slice start,
             Slice limit)
     {
-        // Find length of common prefix
+        // 计算公共前缀的长度
         int sharedBytes = BlockBuilder.calculateSharedBytes(start, limit);
 
-        // Do not shorten if one string is a prefix of the other
+        // 如果一个字符串是另一个的前缀，则不需要压缩
         if (sharedBytes < Math.min(start.length(), limit.length())) {
-            // if we can add one to the last shared byte without overflow and the two keys differ by more than
-            // one increment at this location.
+
             int lastSharedByte = start.getUnsignedByte(sharedBytes);
             if (lastSharedByte < 0xff && lastSharedByte + 1 < limit.getUnsignedByte(sharedBytes)) {
                 Slice result = start.copySlice(0, sharedBytes + 1);
@@ -53,10 +58,16 @@ public class BytewiseComparator implements UserComparator
         return start;
     }
 
+    /**
+     * 找一个>= key的短字符串
+     * @param key 参考key
+     * @return >=key的短字符串
+     */
+
     @Override
     public Slice findShortSuccessor(Slice key)
     {
-        // Find first character that can be incremented
+        // 返回一个大于key短字符串
         for (int i = 0; i < key.length(); i++) {
             int b = key.getUnsignedByte(i);
             if (b != 0xff) {
@@ -65,7 +76,7 @@ public class BytewiseComparator implements UserComparator
                 return result;
             }
         }
-        // key is a run of 0xffs.  Leave it alone.
+        // key已经是他这个长度的最大key了
         return key;
     }
 }

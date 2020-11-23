@@ -14,7 +14,6 @@
         <guava.verision>18.0</guava.verision>
         <air.main.basedir>${project.parent.basedir}</air.main.basedir>
         <bdprefix>com.xiexy.base.shade</bdprefix>
-        <java.version>11</java.version>
     </properties>
     <dependencies>
         <dependency>
@@ -34,11 +33,6 @@
             <artifactId>guava</artifactId>
             <version>${guava.verision}</version>
         </dependency>
-        <dependency>
-            <artifactId>leveldb-project</artifactId>
-            <groupId>com.xiexy.leveldb</groupId>
-            <version>1.0-SNAPSHOT</version>
-        </dependency>
         <!-- for testing -->
 <!--        <dependency>-->
 <!--            <groupId>joda-time</groupId>-->
@@ -48,8 +42,12 @@
         <dependency>
             <groupId>org.testng</groupId>
             <artifactId>testng</artifactId>
-            <version>5.14.10</version>
+            <version>6.8.8</version>
             <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.xiexy.leveldb</groupId>
+            <artifactId>leveldb-api</artifactId>
         </dependency>
     </dependencies>
 
