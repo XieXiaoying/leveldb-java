@@ -29,9 +29,8 @@ public class FileMetaData
     private final InternalKey largest;
 
     /**
-     * Seeks allowed until compaction
+     * 初始化引用计数
      */
-    // todo this mutable state should be moved elsewhere
     private final AtomicInteger allowedSeeks = new AtomicInteger(1 << 30);
 
     public FileMetaData(long number, long fileSize, InternalKey smallest, InternalKey largest)
