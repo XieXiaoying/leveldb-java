@@ -16,6 +16,9 @@ package com.xiexy.base.impl;
 import static com.google.common.base.Preconditions.checkArgument;
 import static java.util.Objects.requireNonNull;
 
+/**
+ * leveldb每添加/修改一次记录都会触发顺序号的+1。
+ */
 public final class SequenceNumber
 {
     // SequenceNumber是Key的一部分，占 7 byte，ValueType占1byte，组合之后就是long
