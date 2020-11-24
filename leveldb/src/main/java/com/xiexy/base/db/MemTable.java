@@ -72,6 +72,7 @@ public class MemTable
         approximateMemoryUsage.addAndGet(key.length() + LONG_UNIT + value.length());
     }
 
+    // Memtable的查询接口传入的是LookupKey，它也是由User Key和Sequence Number组合而成的
     public LookupResult get(LookupKey key)
     {
         requireNonNull(key, "key is null");
