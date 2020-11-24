@@ -1,6 +1,9 @@
 package com.xiexy.base.impl;
 
-public interface LogMonitor
+/**
+ * 汇报错误
+ */
+public interface Reporter
 {
     void corruption(long bytes, String reason);
 

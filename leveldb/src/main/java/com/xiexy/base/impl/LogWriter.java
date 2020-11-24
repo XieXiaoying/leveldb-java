@@ -19,7 +19,6 @@ public interface LogWriter
 
     long getFileNumber();
 
-    // Writes a stream of chunks such that no chunk is split across a block boundary
     void addRecord(Slice record, boolean force)
             throws IOException;
 }

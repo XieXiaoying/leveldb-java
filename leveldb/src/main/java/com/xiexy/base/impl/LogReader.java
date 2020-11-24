@@ -9,35 +9,36 @@ import com.xiexy.base.include.SliceOutput;
 import java.io.IOException;
 import java.nio.channels.FileChannel;
 
-import static com.xiexy.base.impl.LogChunkType.*;
+import static com.xiexy.base.impl.LogType.*;
 import static com.xiexy.base.impl.LogConstants.BLOCK_SIZE;
 import static com.xiexy.base.impl.LogConstants.HEADER_SIZE;
+import static com.xiexy.base.impl.Logs.getCrc32C;
 
 public class LogReader
 {
     private final FileChannel fileChannel;
 
-    private final LogMonitor monitor;
+    private final Reporter reporter;
 
     private final boolean verifyChecksums;
 
     /**
-     * Offset at which to start looking for the first record to return
+     * 偏移，从哪里开始读取第一条record
      */
     private final long initialOffset;
 
     /**
-     * Have we read to the end of the file?
+     * 上次Read()返回长度 < kBlockSize，暗示到了文件结尾EOF
      */
     private boolean eof;
 
     /**
-     * Offset of the last record returned by readRecord.
+     * 函数ReadRecord返回的上一个record的偏移
      */
     private long lastRecordOffset;
 
     /**
-     * Offset of the first location past the end of buffer.
+     * 当前的读取偏移
      */
     private long endOfBufferOffset;
 
@@ -61,10 +62,10 @@ public class LogReader
      */
     private Slice currentChunk = Slices.EMPTY_SLICE;
 
-    public LogReader(FileChannel fileChannel, LogMonitor monitor, boolean verifyChecksums, long initialOffset)
+    public LogReader(FileChannel fileChannel, Reporter reporter, boolean verifyChecksums, long initialOffset)
     {
         this.fileChannel = fileChannel;
-        this.monitor = monitor;
+        this.reporter = reporter;
         this.verifyChecksums = verifyChecksums;
         this.initialOffset = initialOffset;
     }
@@ -124,7 +125,7 @@ public class LogReader
         boolean inFragmentedRecord = false;
         while (true) {
             long physicalRecordOffset = endOfBufferOffset - currentChunk.length();
-            LogChunkType chunkType = readNextChunk();
+            LogType chunkType = readNextChunk();
             switch (chunkType) {
                 case FULL:
                     if (inFragmentedRecord) {
@@ -206,7 +207,7 @@ public class LogReader
     /**
      * Return type, or one of the preceding special values
      */
-    private LogChunkType readNextChunk()
+    private LogType readNextChunk()
     {
         // clear the current chunk
         currentChunk = Slices.EMPTY_SLICE;
@@ -225,7 +226,7 @@ public class LogReader
         int length = currentBlock.readUnsignedByte();
         length = length | currentBlock.readUnsignedByte() << 8;
         byte chunkTypeId = currentBlock.readByte();
-        LogChunkType chunkType = getLogChunkTypeByPersistentId(chunkTypeId);
+        LogType chunkType = getLogChunkTypeByPersistentId(chunkTypeId);
 
         // verify length
         if (length > currentBlock.available()) {
@@ -253,7 +254,7 @@ public class LogReader
         currentChunk = currentBlock.readBytes(length);
 
         if (verifyChecksums) {
-            int actualChecksum = getChunkChecksum(chunkTypeId, currentChunk);
+            int actualChecksum = getCrc32C(chunkTypeId, currentChunk);
             if (actualChecksum != expectedChecksum) {
                 // Drop the rest of the buffer since "length" itself may have
                 // been corrupted and if we trust it, we could find some
@@ -314,8 +315,8 @@ public class LogReader
      */
     private void reportCorruption(long bytes, String reason)
     {
-        if (monitor != null) {
-            monitor.corruption(bytes, reason);
+        if (reporter != null) {
+            reporter.corruption(bytes, reason);
         }
     }
 
@@ -325,8 +326,8 @@ public class LogReader
      */
     private void reportDrop(long bytes, Throwable reason)
     {
-        if (monitor != null) {
-            monitor.corruption(bytes, reason);
+        if (reporter != null) {
+            reporter.corruption(bytes, reason);
         }
     }
 }

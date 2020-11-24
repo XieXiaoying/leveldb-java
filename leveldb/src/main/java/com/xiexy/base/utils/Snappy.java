@@ -20,6 +20,7 @@ import static java.nio.charset.StandardCharsets.UTF_8;
 
 /**
  * <p>
+ * Snappy提供了很多高级API以方便对byte[],Sting,double[]等进行压缩和解压缩
  * A Snappy abstraction which attempts uses the iq80 implementation and falls back
  * to the xerial Snappy implementation it cannot be loaded.  You can change the
  * load order by setting the 'leveldb.snappy' system property.  Example:
@@ -32,7 +33,6 @@ import static java.nio.charset.StandardCharsets.UTF_8;
  * implements the Snappy.SPI interface.
  * </p>
  *
- * @author <a href="http://hiramchirino.com">Hiram Chirino</a>
  */
 public final class Snappy
 {
@@ -61,7 +61,6 @@ public final class Snappy
             implements SPI
     {
         static {
-            // Make sure that the JNI libs are fully loaded.
             try {
                 org.xerial.snappy.Snappy.compress("test");
             }
@@ -109,7 +108,6 @@ public final class Snappy
             implements SPI
     {
         static {
-            // Make sure that the library can fully load.
             try {
                 new IQ80Snappy().compress("test");
             }
