@@ -14,12 +14,25 @@ import static com.xiexy.base.impl.LogConstants.BLOCK_SIZE;
 import static com.xiexy.base.impl.LogConstants.HEADER_SIZE;
 import static com.xiexy.base.impl.Logs.getCrc32C;
 
+/**
+ * 通过给定的文件file对象，从这个file里面读出log records
+ * 循环{
+ *     1. 读文件的block size个字节，即一条log
+ *     2. 将读到的内容放入currentBlock
+ *     3. 解析block的header，将data写到currentLog中
+ *     4. 根据log type决定是否要继续下次循环，知道获得完整的log record并返回
+ * }
+ */
 public class LogReader
 {
     private final FileChannel fileChannel;
-
+    /**
+     * 汇报错误
+     */
     private final Reporter reporter;
-
+    /**
+     * 检查checksum，检查是否有损坏
+     */
     private final boolean verifyChecksums;
 
     /**
@@ -48,19 +61,19 @@ public class LogReader
     private final DynamicSliceOutput recordScratch = new DynamicSliceOutput(BLOCK_SIZE);
 
     /**
-     * Scratch buffer for current block.  The currentBlock is sliced off the underlying buffer.
+     * 一个block大小的缓存，用于从文件中读一个完整的block，并缓存到blockScratch
      */
     private final SliceOutput blockScratch = Slices.allocate(BLOCK_SIZE).output();
 
     /**
-     * The current block records are being read from.
+     * 当前读到的file中的一条record，大小为block
      */
     private SliceInput currentBlock = Slices.EMPTY_SLICE.input();
 
     /**
-     * Current chunk which is sliced from the current block.
+     * 当前currentBlock的data写入currentLog
      */
-    private Slice currentChunk = Slices.EMPTY_SLICE;
+    private Slice currentLog = Slices.EMPTY_SLICE;
 
     public LogReader(FileChannel fileChannel, Reporter reporter, boolean verifyChecksums, long initialOffset)
     {
@@ -76,25 +89,26 @@ public class LogReader
     }
 
     /**
-     * Skips all blocks that are completely before "initial_offset_".
-     * <p/>
-     * Handles reporting corruption
+     * 跳转到record所在的起始block
      *
      * @return true on success.
      */
     private boolean skipToInitialBlock()
     {
+        // 计算在block内的偏移位置，并调整到开始读取block的起始位置
+        // 开始读取日志的时候都要保证读取的是完整的block，这就是调整的目的。
         int offsetInBlock = (int) (initialOffset % BLOCK_SIZE);
         long blockStartLocation = initialOffset - offsetInBlock;
 
-        // Don't search a block if we'd be in the trailer
+        // 如果偏移在最后的6byte里，肯定不是一条完整的记录，跳到下一个block
+        // 可能的情况是一个record的数据区、一个record的header、空串
         if (offsetInBlock > BLOCK_SIZE - 6) {
             blockStartLocation += BLOCK_SIZE;
         }
-
+        // 设置读取偏移，这里设置的是块的开始地址
         endOfBufferOffset = blockStartLocation;
 
-        // Skip to start of first block that can contain the initial record
+        // 跳到包含record的第一个block里
         if (blockStartLocation > 0) {
             try {
                 fileChannel.position(blockStartLocation);
@@ -112,39 +126,44 @@ public class LogReader
     {
         recordScratch.reset();
 
-        // advance to the first record, if we haven't already
+        // 如果上一个record的偏移 < 初始偏移，也就是说初始偏移已经超出了几个block，那么需要把这几个block跳掉，也就是重置起始偏移
         if (lastRecordOffset < initialOffset) {
             if (!skipToInitialBlock()) {
                 return null;
             }
         }
 
-        // Record offset of the logical record that we're reading
+        // 我们正在读取的逻辑record的偏移
         long prospectiveRecordOffset = 0;
-
+        // 当前是否在fragment内，也就是遇到了FIRST 类型的record
         boolean inFragmentedRecord = false;
         while (true) {
-            long physicalRecordOffset = endOfBufferOffset - currentChunk.length();
-            LogType chunkType = readNextChunk();
-            switch (chunkType) {
+            // physicalRecordOffset存储的是当前正在读取的record的偏移值
+            long physicalRecordOffset = endOfBufferOffset - currentLog.length();
+            // 根据不同的type类型，分别进行处理
+            LogType logType = readNextLogType();
+            switch (logType) {
+                // 表明是一条完整的log record，成功返回读取的user record数据
                 case FULL:
                     if (inFragmentedRecord) {
                         reportCorruption(recordScratch.size(), "Partial record without end");
-                        // simply return this full block
+
                     }
+                    // 清空scratch，读取成功不需要返回scratch数据
                     recordScratch.reset();
                     prospectiveRecordOffset = physicalRecordOffset;
+                    // 更新lastRecordOffset
                     lastRecordOffset = prospectiveRecordOffset;
-                    return currentChunk.copySlice();
+                    return currentLog.copySlice();
 
                 case FIRST:
                     if (inFragmentedRecord) {
                         reportCorruption(recordScratch.size(), "Partial record without end");
-                        // clear the scratch and start over from this chunk
+                        // 清空scratch，读取成功不需要返回scratch数据
                         recordScratch.reset();
                     }
                     prospectiveRecordOffset = physicalRecordOffset;
-                    recordScratch.writeBytes(currentChunk);
+                    recordScratch.writeBytes(currentLog);
                     inFragmentedRecord = true;
                     break;
 
@@ -152,11 +171,11 @@ public class LogReader
                     if (!inFragmentedRecord) {
                         reportCorruption(recordScratch.size(), "Missing start of fragmented record");
 
-                        // clear the scratch and skip this chunk
+                        // 清空scratch，读取成功不需要返回scratch数据
                         recordScratch.reset();
                     }
                     else {
-                        recordScratch.writeBytes(currentChunk);
+                        recordScratch.writeBytes(currentLog);
                     }
                     break;
 
@@ -164,12 +183,13 @@ public class LogReader
                     if (!inFragmentedRecord) {
                         reportCorruption(recordScratch.size(), "Missing start of fragmented record");
 
-                        // clear the scratch and skip this chunk
+                        // 清空scratch，读取成功不需要返回scratch数据
                         recordScratch.reset();
                     }
                     else {
-                        recordScratch.writeBytes(currentChunk);
+                        recordScratch.writeBytes(currentLog);
                         lastRecordOffset = prospectiveRecordOffset;
+                        // 最后一个log，返回data
                         return recordScratch.slice().copySlice();
                     }
                     break;
@@ -192,11 +212,11 @@ public class LogReader
                     break;
 
                 default:
-                    int dropSize = currentChunk.length();
+                    int dropSize = currentLog.length();
                     if (inFragmentedRecord) {
                         dropSize += recordScratch.size();
                     }
-                    reportCorruption(dropSize, String.format("Unexpected chunk type %s", chunkType));
+                    reportCorruption(dropSize, String.format("Unexpected chunk type %s", logType));
                     inFragmentedRecord = false;
                     recordScratch.reset();
                     break;
@@ -205,14 +225,14 @@ public class LogReader
     }
 
     /**
-     * Return type, or one of the preceding special values
+     * 读取record当中的data到currentLog中，返回logType
      */
-    private LogType readNextChunk()
+    private LogType readNextLogType()
     {
-        // clear the current chunk
-        currentChunk = Slices.EMPTY_SLICE;
+        // 清楚当前log内容
+        currentLog = Slices.EMPTY_SLICE;
 
-        // read the next block if necessary
+        // 如果buffer小于blockheader的size
         if (currentBlock.available() < HEADER_SIZE) {
             if (!readNextBlock()) {
                 if (eof) {
@@ -221,14 +241,15 @@ public class LogReader
             }
         }
 
-        // parse header
+        // 解析出log header
+        // 根据log的格式，前4 byte是crc32，后2 byte是长度，第7byte是type
         int expectedChecksum = currentBlock.readInt();
         int length = currentBlock.readUnsignedByte();
         length = length | currentBlock.readUnsignedByte() << 8;
-        byte chunkTypeId = currentBlock.readByte();
-        LogType chunkType = getLogChunkTypeByPersistentId(chunkTypeId);
+        byte logTypeId = currentBlock.readByte();
+        LogType logType = getLogChunkTypeByPersistentId(logTypeId);
 
-        // verify length
+        // 如果长度超出block长度，汇报超出错误，情况currentBlock，返回BAD_CHUNK
         if (length > currentBlock.available()) {
             int dropSize = currentBlock.available() + HEADER_SIZE;
             reportCorruption(dropSize, "Invalid chunk length");
@@ -236,30 +257,24 @@ public class LogReader
             return BAD_CHUNK;
         }
 
-        // skip zero length records
-        if (chunkType == ZERO_TYPE && length == 0) {
-            // Skip zero length record without reporting any drops since
-            // such records are produced by the writing code.
+        // 对于ZERO_TYPE，跳过record，不报错误，此种情况是在写的过程中由代码产生的
+        if (logType == ZERO_TYPE && length == 0) {
             currentBlock = Slices.EMPTY_SLICE.input();
             return BAD_CHUNK;
         }
 
-        // Skip physical record that started before initialOffset
+        // 如果record的开始位置在initialOffset之前，则跳过，并返回BAD_CHUNK
         if (endOfBufferOffset - HEADER_SIZE - length < initialOffset) {
             currentBlock.skipBytes(length);
             return BAD_CHUNK;
         }
 
-        // read the chunk
-        currentChunk = currentBlock.readBytes(length);
-
+        // 读取当前log
+        currentLog = currentBlock.readBytes(length);
+        // 校验CRC32，如果校验出错，则汇报错误，并返回kBadRecord。
         if (verifyChecksums) {
-            int actualChecksum = getCrc32C(chunkTypeId, currentChunk);
+            int actualChecksum = getCrc32C(logTypeId, currentLog);
             if (actualChecksum != expectedChecksum) {
-                // Drop the rest of the buffer since "length" itself may have
-                // been corrupted and if we trust it, we could find some
-                // fragment of a real log record that just happens to look
-                // like a valid log record.
                 int dropSize = currentBlock.available() + HEADER_SIZE;
                 currentBlock = Slices.EMPTY_SLICE.input();
                 reportCorruption(dropSize, "Invalid chunk checksum");
@@ -267,37 +282,43 @@ public class LogReader
             }
         }
 
-        // Skip unknown chunk types
-        // Since this comes last so we the, know it is a valid chunk, and is just a type we don't understand
-        if (chunkType == UNKNOWN) {
-            reportCorruption(length, String.format("Unknown chunk type %d", chunkType.getPersistentId()));
+        // 跳过unknown type
+        if (logType == UNKNOWN) {
+            reportCorruption(length, String.format("Unknown chunk type %d", logType.getPersistentId()));
             return BAD_CHUNK;
         }
-
-        return chunkType;
+        // 返回logtype
+        return logType;
     }
 
+    /**
+     * 从文件读取一个block的数据，赋值给currentBlock，更新endOfBufferOffset，返回该block是否可读
+     * @return 当前block是否可读
+     */
     public boolean readNextBlock()
     {
+        // eof为false，表明还没有到文件结尾，清空buffer，并读取数据
         if (eof) {
             return false;
         }
 
-        // clear the block
+        // 清空buffer，因为上次肯定读了一个完整的record
         blockScratch.reset();
 
-        // read the next full block
+        // 读下一个完整的block
         while (blockScratch.writableBytes() > 0) {
             try {
                 int bytesRead = blockScratch.writeBytes(fileChannel, blockScratch.writableBytes());
                 if (bytesRead < 0) {
-                    // no more bytes to read
+                    // 如果没有可读的内容，说明已经到文件末尾了
                     eof = true;
                     break;
                 }
+                // 更新buffer读取偏移值
                 endOfBufferOffset += bytesRead;
             }
             catch (IOException e) {
+                // 读取失败，currentBlock置空，返回错误报告，设置eof为true，返回不可读
                 currentBlock = Slices.EMPTY_SLICE.input();
                 reportDrop(BLOCK_SIZE, e);
                 eof = true;
@@ -305,13 +326,14 @@ public class LogReader
             }
 
         }
+        // 将缓存中的数据赋值给currentBlock
         currentBlock = blockScratch.slice().input();
+        // 返回下一个block可读
         return currentBlock.isReadable();
     }
 
     /**
-     * Reports corruption to the monitor.
-     * The buffer must be updated to remove the dropped bytes prior to invocation.
+     * 报告
      */
     private void reportCorruption(long bytes, String reason)
     {
@@ -321,8 +343,7 @@ public class LogReader
     }
 
     /**
-     * Reports dropped bytes to the monitor.
-     * The buffer must be updated to remove the dropped bytes prior to invocation.
+     * 报告
      */
     private void reportDrop(long bytes, Throwable reason)
     {
