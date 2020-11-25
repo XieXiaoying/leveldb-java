@@ -34,6 +34,7 @@ public class InternalTableIterator
     {
         if (tableIterator.hasNext()) {
             Map.Entry<Slice, Slice> next = tableIterator.next();
+            // guava 的 Maps.immutableEntry方法用于创建单个键值对
             return Maps.immutableEntry(new InternalKey(next.getKey()), next.getValue());
         }
         return null;

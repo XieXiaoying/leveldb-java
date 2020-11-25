@@ -18,6 +18,10 @@ import java.util.concurrent.Callable;
 import static com.google.common.base.Preconditions.checkArgument;
 import static com.xiexy.base.CompressionType.SNAPPY;
 
+/**
+ * MMapTable继承自Table，实现了父类的抽象函数，通过内存映射文件读取文件内容
+ * 实现时根据指定的偏移和大小，读取filter的功能，对应于源码中的Table::ReadFilter()
+ */
 public class MMapTable
         extends Table
 {
@@ -36,6 +40,7 @@ public class MMapTable
     {
         long size = fileChannel.size();
         data = fileChannel.map(FileChannel.MapMode.READ_ONLY, 0, size);
+        // 从文件的结尾读取Footer，并Decode到Footer对象中
         Slice footerSlice = Slices.copiedBuffer(data, (int) size - Footer.ENCODED_LENGTH, Footer.ENCODED_LENGTH);
         return Footer.readFooter(footerSlice);
     }
@@ -68,29 +73,19 @@ public class MMapTable
         }
     }
 
-    @SuppressWarnings({"NonPrivateFieldAccessedInSynchronizedContext", "AssignmentToStaticFieldFromInstanceMethod"})
+    // 压缩block的data，返回压缩后的block
     @Override
     protected Block readBlock(BlockHandle blockHandle)
             throws IOException
     {
-        // read block trailer
+        // 读 block trailer，获得压缩类型 和 crc32
         BlockTrailer blockTrailer = BlockTrailer.readBlockTrailer(Slices.copiedBuffer(this.data,
                 (int) blockHandle.getOffset() + blockHandle.getDataSize(),
                 BlockTrailer.ENCODED_LENGTH));
 
-// todo re-enable crc check when ported to support direct buffers
-//        // only verify check sums if explicitly asked by the user
-//        if (verifyChecksums) {
-//            // checksum data and the compression type in the trailer
-//            PureJavaCrc32C checksum = new PureJavaCrc32C();
-//            checksum.update(data.getRawArray(), data.getRawOffset(), blockHandle.getDataSize() + 1);
-//            int actualCrc32c = checksum.getMaskedValue();
-//
-//            checkState(blockTrailer.getCrc32c() == actualCrc32c, "Block corrupted: checksum mismatch");
-//        }
 
-        // decompress data
         Slice uncompressedData;
+        // 读取未压缩的data
         ByteBuffer uncompressedBuffer = read(this.data, (int) blockHandle.getOffset(), blockHandle.getDataSize());
         if (blockTrailer.getCompressionType() == SNAPPY) {
             synchronized (MMapTable.class) {

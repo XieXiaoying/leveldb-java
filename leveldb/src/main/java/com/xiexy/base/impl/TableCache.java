@@ -18,6 +18,11 @@ import java.util.concurrent.ExecutionException;
 
 import static java.util.Objects.requireNonNull;
 
+/**
+ * TableCache缓存的是Table对象，每个DB一个
+ * 它内部使用一个LRUCache缓存所有的table对象，实际上其内容是文件编号{file number, TableAndFile}。
+ *
+ */
 public class TableCache
 {
     private final LoadingCache<Long, TableAndFile> cache;
