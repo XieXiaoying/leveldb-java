@@ -31,7 +31,7 @@ public class TableCache
     public TableCache(final File databaseDir, int tableCacheSize, final UserComparator userComparator, final boolean verifyChecksums)
     {
         requireNonNull(databaseDir, "databaseName is null");
-
+        // 初始化本地缓存，为缓存设置最大存储数量，设置监听器
         cache = CacheBuilder.newBuilder()
                 .maximumSize(tableCacheSize)
                 .removalListener(new RemovalListener<Long, TableAndFile>()
@@ -39,16 +39,23 @@ public class TableCache
                     @Override
                     public void onRemoval(RemovalNotification<Long, TableAndFile> notification)
                     {
+                        // 缓存项被移除时,将文件关闭
                         Table table = notification.getValue().getTable();
+                        // table.closer()继承自Callable
+                        // 创建线程池、创建table的虚引用
                         finalizer.addCleanup(table, table.closer());
                     }
                 })
                 .build(new CacheLoader<Long, TableAndFile>()
                 {
+                    // 当本地缓存命没有中时，调用load方法获取结果并将结果缓存
                     @Override
                     public TableAndFile load(Long fileNumber)
                             throws IOException
                     {
+                        // 说明table不在cache中，则根据file number和db name打开一个RadomAccessFile。
+                        // Table文件格式为：<db name>.<filenumber(%6u)>.sst。
+                        // 如果文件打开成功，则调用Table::Open读取sstable文件。
                         return new TableAndFile(databaseDir, fileNumber, userComparator, verifyChecksums);
                     }
                 });
@@ -58,7 +65,7 @@ public class TableCache
     {
         return newIterator(file.getNumber());
     }
-
+    // 函数NewIterator()，返回一个可以遍历Table对象的Iterator指针
     public InternalTableIterator newIterator(long number)
     {
         return new InternalTableIterator(getTable(number).iterator());
@@ -68,7 +75,7 @@ public class TableCache
     {
         return getTable(file.getNumber()).getApproximateOffsetOf(key);
     }
-
+    // 从缓存中获取table
     private Table getTable(long number)
     {
         Table table;
@@ -103,7 +110,9 @@ public class TableCache
         private TableAndFile(File databaseDir, long fileNumber, UserComparator userComparator, boolean verifyChecksums)
                 throws IOException
         {
+            // sstable文件名
             String tableFileName = Filename.tableFileName(fileNumber);
+            // 创建文件引用
             File tableFile = new File(databaseDir, tableFileName);
             FileInputStream fis = null;
             try {

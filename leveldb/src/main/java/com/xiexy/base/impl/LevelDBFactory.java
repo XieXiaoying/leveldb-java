@@ -23,18 +23,21 @@ public class LevelDBFactory
         }
         CPU_DATA_MODEL = is64bit ? 64 : 32;
     }
-
-    // We only use MMAP on 64 bit systems since it's really easy to run out of
-    // virtual address space on a 32 bit system when all the data is getting mapped
-    // into memory.  If you really want to use MMAP anyways, use -Dleveldb.mmap=true
+    // 只在64位系统上使用MMAP，因为在32位系统上，当所有数据都被映射到内存中时，很容易耗尽虚拟地址空间。
+    // 如果真的想使用MMAP，请使用-Dleveldb.mmap=true
     public static final boolean USE_MMAP = Boolean.parseBoolean(System.getProperty("leveldb.mmap", "" + (CPU_DATA_MODEL > 32)));
-
+    // 版本
     public static final String VERSION;
 
     static {
         String v = "unknown";
+        // LevelDBFactory.class.getResourceAsStream("/version.txt"): 从类路径下也就是从classes文件夹下查找资源
+        // 即：....../target/classes/ 下面找version.txt
+        // LevelDBFactory.class.getResourceAsStream("version.txt"): 从当前类所在的包下查找资源
+        // 即：....../target/classes/com.xiexy.base/impl/ 下面找version.txt
         InputStream is = LevelDBFactory.class.getResourceAsStream("version.txt");
         try {
+            // 读取文件版本
             v = new BufferedReader(new InputStreamReader(is, UTF_8)).readLine();
         }
         catch (Throwable e) {
@@ -62,7 +65,7 @@ public class LevelDBFactory
     public void destroy(File path, Options options)
             throws IOException
     {
-        // TODO: This should really only delete leveldb-created files.
+        // 递归删除文件
         FileUtils.deleteRecursively(path);
     }
 

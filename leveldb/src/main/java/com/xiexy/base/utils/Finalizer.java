@@ -58,19 +58,19 @@ public class Finalizer<T>
                     .setNameFormat("FinalizerQueueProcessor-%d")
                     .setDaemon(true)
                     .build();
+            // 创建threads个线程，每个线程由线程工厂创建
             executor = Executors.newFixedThreadPool(threads, threadFactory);
 
-            // start queue processor jobs
             for (int i = 0; i < threads; i++) {
+                // 将任务交给线程池执行
                 executor.submit(new FinalizerQueueProcessor());
             }
         }
 
-        // create a reference to the item so we are notified when it is garbage collected
+        // 创建item对象的虚引用，并配套引用队列，可以通过引用队列获得对象，并在垃圾回收之前对对象做处理
         FinalizerPhantomReference<T> reference = new FinalizerPhantomReference<>(item, referenceQueue, cleanup);
 
-        // we must keep a strong reference to the reference object so we are notified when the item
-        // is no longer reachable (if the reference object is garbage collected we are never notified)
+        // 当item已经被回收之后，在references中获取这个对象的虚引用，将虚引用对象加入到ConcurrentHashMap中
         references.put(reference, Boolean.TRUE);
     }
 
@@ -82,6 +82,7 @@ public class Finalizer<T>
         }
         for (FinalizerPhantomReference<T> r : references.keySet()) {
             try {
+                // 在销毁Finalizer之前，清除引用队列里的虚引用对象
                 r.cleanup();
             }
             catch (Exception e) {
@@ -99,7 +100,8 @@ public class Finalizer<T>
     {
         private final AtomicBoolean cleaned = new AtomicBoolean(false);
         private final Callable<?> cleanup;
-
+        // 虚引用的对象：referent，引用队列：queue
+        // 下面构造函数的目的是创建虚引用对象referent，并将它关联到引用队列queue。
         private FinalizerPhantomReference(T referent, ReferenceQueue<? super T> queue, Callable<?> cleanup)
         {
             super(referent, queue);
@@ -109,6 +111,7 @@ public class Finalizer<T>
         private void cleanup()
                 throws Exception
         {
+            // CAS原子操作
             if (cleaned.compareAndSet(false, true)) {
                 cleanup.call();
             }
@@ -122,7 +125,7 @@ public class Finalizer<T>
         public void run()
         {
             while (!destroyed.get()) {
-                // get the next reference to cleanup
+                // 清除引用队列中的引用对象
                 FinalizerPhantomReference<T> reference;
                 try {
                     reference = (FinalizerPhantomReference<T>) referenceQueue.remove();
@@ -132,7 +135,7 @@ public class Finalizer<T>
                     return;
                 }
 
-                // remove the reference object itself from our list of references
+                // 在ConcurrentHashMap中移除该虚引用对象
                 references.remove(reference);
 
                 boolean rescheduleAndReturn = false;

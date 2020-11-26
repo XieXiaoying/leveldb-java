@@ -29,7 +29,7 @@ public final class Filename
     }
 
     /**
-     * Return the name of the log file with the specified number.
+     * 返回log文件名
      */
     public static String logFileName(long number)
     {
@@ -37,7 +37,7 @@ public final class Filename
     }
 
     /**
-     * Return the name of the sstable with the specified number.
+     * 返回sstable文件名
      */
     public static String tableFileName(long number)
     {
@@ -181,7 +181,7 @@ public final class Filename
         }
         return ImmutableList.copyOf(files);
     }
-
+    //按照number.suffix的格式返回文件名
     private static String makeFileName(long number, String suffix)
     {
         checkArgument(number >= 0, "number is negative");
