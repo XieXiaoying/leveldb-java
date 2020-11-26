@@ -11,6 +11,15 @@ import static com.google.common.base.Preconditions.checkArgument;
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static java.util.Objects.requireNonNull;
 
+/**
+ * leveldb包含6种文件：
+ * 1. <dbname>/[0-9]+.log：db操作日志
+ * 2. <dbname>/[0-9]+.sst：db的sstable文件
+ * 3. <dbname>/MANIFEST-[0-9]+：DB元信息文件
+ * 4. <dbname>/CURRENT：记录当前正在使用的Manifest文件
+ * 5. <dbname>/log：系统的运行日志，记录系统的运行信息或者错误日志。
+ * 6. <dbname>/dbtmp：临时数据库文件，repair时临时生成的。
+ */
 public final class Filename
 {
     private Filename()
@@ -70,7 +79,7 @@ public final class Filename
     }
 
     /**
-     * Return the name of a temporary file with the specified number.
+     * 返回临时文件名称
      */
     public static String tempFileName(long number)
     {

@@ -53,6 +53,7 @@ public class TableCache
                     public TableAndFile load(Long fileNumber)
                             throws IOException
                     {
+                        // 这里是添加元素的地方
                         // 说明table不在cache中，则根据file number和db name打开一个RadomAccessFile。
                         // Table文件格式为：<db name>.<filenumber(%6u)>.sst。
                         // 如果文件打开成功，则调用Table::Open读取sstable文件。
@@ -70,7 +71,7 @@ public class TableCache
     {
         return new InternalTableIterator(getTable(number).iterator());
     }
-
+    // 获得key在文件中的偏移
     public long getApproximateOffsetOf(FileMetaData file, Slice key)
     {
         return getTable(file.getNumber()).getApproximateOffsetOf(key);
@@ -94,10 +95,12 @@ public class TableCache
 
     public void close()
     {
+        // 清除所有缓存项
         cache.invalidateAll();
         finalizer.destroy();
     }
 
+    // 清楚文件缓存
     public void evict(long number)
     {
         cache.invalidate(number);
@@ -120,7 +123,7 @@ public class TableCache
                 FileChannel fileChannel = fis.getChannel();
                 if (LevelDBFactory.USE_MMAP) {
                     table = new MMapTable(tableFile.getAbsolutePath(), fileChannel, userComparator, verifyChecksums);
-                    // We can close the channel and input stream as the mapping does not need them
+                    // 能走到这里，说明不需要文件流
                     Closeables.closeQuietly(fis);
                 }
                 else {

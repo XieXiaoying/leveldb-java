@@ -3,6 +3,7 @@ package com.xiexy.base.impl;
 import com.xiexy.base.DB;
 import com.xiexy.base.DBFactory;
 import com.xiexy.base.Options;
+import com.xiexy.base.utils.FileUtils;
 
 import java.io.*;
 

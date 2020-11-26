@@ -1,10 +1,14 @@
 package com.xiexy.base.impl;
 
 import com.google.common.collect.ImmutableList;
+import com.xiexy.base.include.Slice;
+import com.xiexy.base.table.UserComparator;
 
 import java.util.List;
 
 import static com.google.common.base.Preconditions.checkArgument;
+import static com.xiexy.base.impl.DbConstants.NUM_LEVELS;
+import static com.xiexy.base.impl.VersionSet.MAX_GRAND_PARENT_OVERLAP_BYTES;
 import static java.util.Objects.requireNonNull;
 
 public class Compaction
