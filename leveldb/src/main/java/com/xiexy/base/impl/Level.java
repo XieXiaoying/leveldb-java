@@ -134,6 +134,8 @@ public class Level
 
     private static <T> int ceilingEntryIndex(List<T> list, T key, Comparator<T> comparator)
     {
+        // 如果搜索键包含在列表中，则返回搜索键的索引；否则返回 (-(插入点) - 1)。
+        // 插入点：被定义为将键插入列表的那一点，即第一个大于此键的元素索引；
         int insertionPoint = Collections.binarySearch(list, key, comparator);
         if (insertionPoint < 0) {
             insertionPoint = -(insertionPoint + 1);
