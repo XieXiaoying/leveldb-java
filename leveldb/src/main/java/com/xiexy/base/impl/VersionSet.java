@@ -17,6 +17,9 @@ import com.google.common.base.Joiner;
 import com.google.common.collect.*;
 import com.google.common.io.Files;
 import com.xiexy.base.include.Slice;
+import com.xiexy.base.utils.InternalIterator;
+import com.xiexy.base.utils.Level0Iterator;
+import com.xiexy.base.utils.MergingIterator;
 
 import java.io.File;
 import java.io.FileInputStream;
@@ -27,6 +30,7 @@ import java.util.concurrent.atomic.AtomicLong;
 
 import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkState;
+import static com.xiexy.base.impl.LogReporters.throwExceptionMonitor;
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static java.util.Objects.requireNonNull;
 
@@ -34,19 +38,22 @@ public class VersionSet
         implements SeekingIterable<InternalKey, Slice>{
     private static final int L0_COMPACTION_TRIGGER = 4;
 
-    public static final int TARGET_FILE_SIZE = 2 * 1048576;
+    public static final int TARGET_FILE_SIZE = 2 * 1048576; // 2M
 
     // Maximum bytes of overlaps in grandparent (i.e., level+2) before we
     // stop building a single file in a level.level+1 compaction.
     public static final long MAX_GRAND_PARENT_OVERLAP_BYTES = 10 * TARGET_FILE_SIZE;
-
+    // nextFileNumber从2开始
     private final AtomicLong nextFileNumber = new AtomicLong(2);
     private long manifestFileNumber = 1;
+    // 当前version
     private Version current;
+    // 获取、设置last sequence，set时不能后退
     private long lastSequence;
+    // 返回当前log文件编号
     private long logNumber;
     private long prevLogNumber;
-
+    // activeVersions保存version信息，我们这里想要在用version的时候就可以拿到，但是又不希望影响key(也就是version)的生命周期，所以用了弱引用
     private final Map<Version, Object> activeVersions = new MapMaker().weakKeys().makeMap();
     private final File databaseDir;
     private final TableCache tableCache;
@@ -55,12 +62,14 @@ public class VersionSet
     private LogWriter descriptorLog;
     private final Map<Integer, InternalKey> compactPointers = new TreeMap<>();
 
+    // VersionSet会使用到TableCache，这个是调用者传入的。TableCache用于Get k/v操作
     public VersionSet(File databaseDir, TableCache tableCache, InternalKeyComparator internalKeyComparator)
             throws IOException
     {
         this.databaseDir = databaseDir;
         this.tableCache = tableCache;
         this.internalKeyComparator = internalKeyComparator;
+        // 创建新的Version并加入到Version链表中，并设置CURRENT=新创建version；
         appendVersion(new Version(this));
 
         initializeIfNeeded();
@@ -77,7 +86,7 @@ public class VersionSet
             edit.setLogNumber(prevLogNumber);
             edit.setNextFileNumber(nextFileNumber.get());
             edit.setLastSequenceNumber(lastSequence);
-
+            // 创建可以写的文件
             LogWriter log = Logs.createLogWriter(new File(databaseDir, Filename.descriptorFileName(manifestFileNumber)), manifestFileNumber);
             try {
                 writeSnapshot(log);
@@ -106,10 +115,11 @@ public class VersionSet
         }
 
         Set<Version> versions = activeVersions.keySet();
-        // TODO:
-        // log("DB closed with "+versions.size()+" open snapshots. This could mean your application has a resource leak.");
     }
 
+    /**
+     * 把v加入到versionset中，并设置为current version。并释放老的current version
+     */
     private void appendVersion(Version version)
     {
         requireNonNull(version, "version is null");
@@ -144,7 +154,7 @@ public class VersionSet
     {
         return current;
     }
-
+    // 当前的MANIFEST文件号
     public long getManifestFileNumber()
     {
         return manifestFileNumber;
@@ -154,7 +164,7 @@ public class VersionSet
     {
         return nextFileNumber.getAndIncrement();
     }
-
+    // 返回当前log文件编号
     public long getLogNumber()
     {
         return logNumber;
@@ -201,12 +211,12 @@ public class VersionSet
     {
         return current.overlapInLevel(level, smallestUserKey, largestUserKey);
     }
-
+    // 返回指定level的文件个数
     public int numberOfFilesInLevel(int level)
     {
         return current.numberOfFilesInLevel(level);
     }
-
+    // 返回指定level中所有sstable文件大小的和
     public long numberOfBytesInLevel(int level)
     {
         return current.numberOfFilesInLevel(level);
@@ -217,15 +227,19 @@ public class VersionSet
         return lastSequence;
     }
 
+    // 获取、设置last sequence，set时不能后退
     public void setLastSequence(long newLastSequence)
     {
         checkArgument(newLastSequence >= lastSequence, "Expected newLastSequence to be greater than or equal to current lastSequence");
         this.lastSequence = newLastSequence;
     }
 
+    // 在current version上应用指定的VersionEdit，生成新的MANIFEST信息，保存到磁盘上，并用作current version。
     public void logAndApply(VersionEdit edit)
             throws IOException
     {
+        // 为edit设置log number等4个计数器。
+        // 要保证edit自己的log number是比较大的那个，否则就是致命错误。保证edit的log number小于next file number，否则就是致命错误。
         if (edit.getLogNumber() != null) {
             checkArgument(edit.getLogNumber() >= logNumber);
             checkArgument(edit.getLogNumber() < nextFileNumber.get());
@@ -240,52 +254,57 @@ public class VersionSet
 
         edit.setNextFileNumber(nextFileNumber.get());
         edit.setLastSequenceNumber(lastSequence);
-
+        // 创建一个新的Version v，并把新的edit变动保存到v中。
         Version version = new Version(this);
         Builder builder = new Builder(this, current);
         builder.apply(edit);
         builder.saveTo(version);
-
+        // 如前分析，只是为v计算执行compaction的最佳level
         finalizeVersion(version);
 
         boolean createdNewManifest = false;
         try {
-            // Initialize new descriptor log file if necessary by creating
-            // a temporary file that contains a snapshot of the current version.
+            // 如果MANIFEST文件指针不存在，就创建并初始化一个新的MANIFEST文件。
+            // 这只会发生在第一次打开数据库时。这个MANIFEST文件保存了current version的快照。
             if (descriptorLog == null) {
                 edit.setNextFileNumber(nextFileNumber.get());
                 descriptorLog = Logs.createLogWriter(new File(databaseDir, Filename.descriptorFileName(manifestFileNumber)), manifestFileNumber);
-                writeSnapshot(descriptorLog);
+                writeSnapshot(descriptorLog);// 写入快照
                 createdNewManifest = true;
             }
 
-            // Write new record to MANIFEST log
+            // 序列化current version信息
             Slice record = edit.encode();
+            // append到MANIFEST log中
             descriptorLog.addRecord(record, true);
 
-            // If we just created a new descriptor file, install it by writing a
-            // new CURRENT file that points to it.
+            //如果刚才创建了一个MANIFEST文件，通过写一个指向它的CURRENT文件
+            //安装它；不需要再次检查MANIFEST是否出错，因为如果出错后面会删除它
             if (createdNewManifest) {
                 Filename.setCurrentFile(databaseDir, descriptorLog.getFileNumber());
             }
         }
         catch (IOException e) {
-            // New manifest file was not installed, so clean up state and delete the file
+            // Manifest创建失败
             if (createdNewManifest) {
                 descriptorLog.close();
-                // todo add delete method to LogWriter
                 new File(databaseDir, Filename.logFileName(descriptorLog.getFileNumber())).delete();
                 descriptorLog = null;
             }
             throw e;
         }
 
-        // Install the new version
+        // 安装这个新的version
         appendVersion(version);
         logNumber = edit.getLogNumber();
         prevLogNumber = edit.getPreviousLogNumber();
     }
 
+    /**
+     * 把current version保存到log中，信息包括comparator名字、compaction点和各级sstable文件，函数逻辑很直观。
+     * @param log
+     * @throws IOException
+     */
     private void writeSnapshot(LogWriter log)
             throws IOException
     {
@@ -302,21 +321,23 @@ public class VersionSet
         Slice record = edit.encode();
         log.addRecord(record, false);
     }
-
+    // 恢复函数，从磁盘恢复最后保存的元信息
     public void recover()
             throws IOException
     {
-        // Read "CURRENT" file, which contains a pointer to the current manifest file
+        // 根据CURRENT指定的MANIFEST，读取db元信息。
         File currentFile = new File(databaseDir, Filename.currentFileName());
         checkState(currentFile.exists(), "CURRENT file does not exist");
 
+        // 读取CURRENT文件中的内容，也就是最新的MANIFEST文件名，CURRENT文件以\n结尾，读取后需要trim下
         String currentName = Files.toString(currentFile, UTF_8);
         if (currentName.isEmpty() || currentName.charAt(currentName.length() - 1) != '\n') {
             throw new IllegalStateException("CURRENT file does not end with newline");
         }
         currentName = currentName.substring(0, currentName.length() - 1);
 
-        // open file channel
+        // 根据最新的MANIFEST文件名打开MANIFEST文件
+        // 数据流会在 try 执行完毕后自动被关闭
         try (FileInputStream fis = new FileInputStream(new File(databaseDir, currentName));
              FileChannel fileChannel = fis.getChannel()) {
             // read log edit log
@@ -324,24 +345,25 @@ public class VersionSet
             Long lastSequence = null;
             Long logNumber = null;
             Long prevLogNumber = null;
+            // 构建current每一层的状态信息
             Builder builder = new Builder(this, current);
 
             LogReader reader = new LogReader(fileChannel, throwExceptionMonitor(), true, 0);
+            // 读取MANIFEST内容，MANIFEST是以log的方式写入的，因此这里调用的是log::Reader来读取。
             for (Slice record = reader.readRecord(); record != null; record = reader.readRecord()) {
-                // read version edit
+                // 然后调用VersionEdit::DecodeFrom，从内容解析出VersionEdit对象
                 VersionEdit edit = new VersionEdit(record);
 
                 // verify comparator
-                // todo implement user comparator
                 String editComparator = edit.getComparatorName();
                 String userComparator = internalKeyComparator.name();
                 checkArgument(editComparator == null || editComparator.equals(userComparator),
                         "Expected user comparator %s to match existing database comparator ", userComparator, editComparator);
 
-                // apply edit
+                // 将VersionEdit记录的改动应用到versionSet中
                 builder.apply(edit);
 
-                // save edit values for verification below
+                // 读取MANIFEST中的log number, prev log number, nextfile number, last sequence。
                 logNumber = coalesce(edit.getLogNumber(), logNumber);
                 prevLogNumber = coalesce(edit.getPreviousLogNumber(), prevLogNumber);
                 nextFileNumber = coalesce(edit.getNextFileNumber(), nextFileNumber);
@@ -367,9 +389,10 @@ public class VersionSet
             }
 
             Version newVersion = new Version(this);
+            // 把当前的状态合并到newVersion
             builder.saveTo(newVersion);
 
-            // Install recovered version
+            // finalizeVersion(v)和AppendVersion(v)用来安装并使用version v
             finalizeVersion(newVersion);
 
             appendVersion(newVersion);
@@ -381,6 +404,10 @@ public class VersionSet
         }
     }
 
+    /**
+     * 该函数依照规则为下次的compaction计算出最适用的level，对于level 0和>0需要分别对待，逻辑如下。
+     * @param version
+     */
     private void finalizeVersion(Version version)
     {
         // Precomputed best level for next compaction
@@ -390,28 +417,23 @@ public class VersionSet
         for (int level = 0; level < version.numberOfLevels() - 1; level++) {
             double score;
             if (level == 0) {
-                // We treat level-0 specially by bounding the number of files
-                // instead of number of bytes for two reasons:
-                //
-                // (1) With larger write-buffer sizes, it is nice not to do too
-                // many level-0 compactions.
-                //
-                // (2) The files in level-0 are merged on every read and
-                // therefore we wish to avoid too many files when the individual
-                // file size is small (perhaps because of a small write-buffer
-                // setting, or very high compression ratios, or lots of
-                // overwrites/deletions).
+                // level0和其它level计算方法不同，原因如下，这也是leveldb为compaction所做的另一个优化。
+                // 1. 对于较大的写缓存（write-buffer），做太多的level 0 compaction并不好
+                // 2. 每次read操作都要merge level 0的所有文件，因此我们不希望level 0有太多的小文件存在
+                // （比如写缓存太小，或者压缩比较高，或者覆盖/删除较多导致小文件太多）。这里的写缓存应该就是配置的操作log大小。
+                // 对于level 0以文件个数计算，L0_COMPACTION_TRIGGER默认配置为4
                 score = 1.0 * version.numberOfFilesInLevel(level) / L0_COMPACTION_TRIGGER;
             }
             else {
-                // Compute the ratio of current size to size limit.
+                // 对于level>0，根据level内的文件总大小计算
                 long levelBytes = 0;
                 for (FileMetaData fileMetaData : version.getFiles(level)) {
                     levelBytes += fileMetaData.getFileSize();
                 }
+                // maxBytesForLevel：根据level返回其本层文件总大小的预定最大值。
                 score = 1.0 * levelBytes / maxBytesForLevel(level);
             }
-
+            // 找到文件最大的level和score
             if (score > bestScore) {
                 bestLevel = level;
                 bestScore = score;
@@ -422,6 +444,7 @@ public class VersionSet
         version.setCompactionScore(bestScore);
     }
 
+    // 返回各参数表达式中第一个非空值
     private static <V> V coalesce(V... values)
     {
         for (V value : values) {
@@ -431,7 +454,7 @@ public class VersionSet
         }
         return null;
     }
-
+    // 获取函数，把所有version的所有level的文件加入到@live中
     public List<FileMetaData> getLiveFiles()
     {
         ImmutableList.Builder<FileMetaData> builder = ImmutableList.builder();
@@ -441,10 +464,11 @@ public class VersionSet
         return builder.build();
     }
 
+    // maxBytesForLevel
     private static double maxBytesForLevel(int level)
     {
-        // Note: the result for level zero is not really used since we set
-        // the level-0 compaction threshold based on number of files.
+        // level 0 用不到这个计算规则，因为level 0 是基于文件数量的
+        // 1048576 = 1024 * 1024，也就是1M
         double result = 10 * 1048576.0;  // Result for both level-0 and level-1
         while (level > 1) {
             result *= 10;
@@ -652,9 +676,9 @@ public class VersionSet
     }
 
     /**
-     * A helper class so we can efficiently apply a whole sequence
-     * of edits to a particular state without creating intermediate
-     * Versions that contain full copies of the intermediate state.
+     * Builder是一个内部辅助类，其主要作用是：
+     * 1 把一个MANIFEST记录的元信息应用到版本管理器VersionSet中；
+     * 2 把当前的版本状态设置到一个Version对象中。
      */
     private static class Builder
     {
@@ -669,48 +693,46 @@ public class VersionSet
 
             levels = new ArrayList<>(baseVersion.numberOfLevels());
             for (int i = 0; i < baseVersion.numberOfLevels(); i++) {
+                // 构建每一层的状态信息，包括添加、删除的文件
                 levels.add(new LevelState(versionSet.internalKeyComparator));
             }
         }
 
         /**
-         * Apply the specified edit to the current state.
+         * 该函数将edit中的修改应用到当前状态中
          */
         public void apply(VersionEdit edit)
         {
-            // Update compaction pointers
+            // 把edit记录的compaction点应用到当前状态
             for (Map.Entry<Integer, InternalKey> entry : edit.getCompactPointers().entrySet()) {
                 Integer level = entry.getKey();
                 InternalKey internalKey = entry.getValue();
                 versionSet.compactPointers.put(level, internalKey);
             }
 
-            // Delete files
+            // 把edit记录的已删除文件应用到当前状态
             for (Map.Entry<Integer, Long> entry : edit.getDeletedFiles().entries()) {
                 Integer level = entry.getKey();
                 Long fileNumber = entry.getValue();
                 levels.get(level).deletedFiles.add(fileNumber);
-                // todo missing update to addedFiles?
+
             }
 
-            // Add new files
+            // 把edit记录的新加文件应用到当前状态，这里会初始化文件的allowedSeeks值，以在文件被无谓seek指定次数后自动执行compaction，
+            // 这里作者阐述了其设置规则。
             for (Map.Entry<Integer, FileMetaData> entry : edit.getNewFiles().entries()) {
                 Integer level = entry.getKey();
                 FileMetaData fileMetaData = entry.getValue();
 
-                // We arrange to automatically compact this file after
-                // a certain number of seeks.  Let's assume:
-                //   (1) One seek costs 10ms
-                //   (2) Writing or reading 1MB costs 10ms (100MB/s)
-                //   (3) A compaction of 1MB does 25MB of IO:
-                //         1MB read from this level
-                //         10-12MB read from next level (boundaries may be misaligned)
-                //         10-12MB written to next level
-                // This implies that 25 seeks cost the same as the compaction
-                // of 1MB of data.  I.e., one seek costs approximately the
-                // same as the compaction of 40KB of data.  We are a little
-                // conservative and allow approximately one seek for every 16KB
-                // of data before triggering a compaction.
+                // 值allowedSeeks（引用计数）事关compaction的优化，其计算依据如下，首先假设：
+                //   (1) 一次seek时间为10ms
+                //   (2) 写入1MB数据的时间为10ms（100MB/s）
+                //   (3) compact 1MB的数据需要执行25MB的IO：
+                //         从本层读取1MB
+                //         从下一层读取10-12MB（文件的key range边界可能是非对齐的）
+                //         向下一层写入10-12MB
+                // 这意味这25次seek的代价等同于compact 1MB的数据，也就是一次seek花费的时间大约相当于compact 40KB的数据。
+                // 基于保守的角度考虑，对于每16KB的数据，我们允许它在触发compaction之前能做一次seek。
                 int allowedSeeks = (int) (fileMetaData.getFileSize() / 16384);
                 if (allowedSeeks < 100) {
                     allowedSeeks = 100;
@@ -723,16 +745,16 @@ public class VersionSet
         }
 
         /**
-         * Saves the current state in specified version.
+         * 把当前的状态存储到version中.
+         * For循环遍历所有的level，把新加的文件和已存在的文件merge在一起，丢弃已删除的文件，结果保存在version中。
+         * 对于level> 0，还要确保集合中的文件没有重合。
          */
         public void saveTo(Version version)
                 throws IOException
         {
             FileMetaDataBySmallestKey cmp = new FileMetaDataBySmallestKey(versionSet.internalKeyComparator);
             for (int level = 0; level < baseVersion.numberOfLevels(); level++) {
-                // Merge the set of added files with the set of pre-existing files.
-                // Drop any deleted files.  Store the result in *v.
-
+                // 原文件集合
                 Collection<FileMetaData> baseFiles = baseVersion.getFiles().asMap().get(level);
                 if (baseFiles == null) {
                     baseFiles = ImmutableList.of();
@@ -742,38 +764,43 @@ public class VersionSet
                     addedFiles = ImmutableSortedSet.of();
                 }
 
-                // files must be added in sorted order so assertion check in maybeAddFile works
+                // 将原文件和新加的文件，按顺序排好
                 ArrayList<FileMetaData> sortedFiles = new ArrayList<>(baseFiles.size() + addedFiles.size());
                 sortedFiles.addAll(baseFiles);
                 sortedFiles.addAll(addedFiles);
                 Collections.sort(sortedFiles, cmp);
-
+                // 将文件merge到该level到version中
                 for (FileMetaData fileMetaData : sortedFiles) {
                     maybeAddFile(version, level, fileMetaData);
                 }
-
-                //#ifndef NDEBUG  todo
-                // Make sure there is no overlap in levels > 0
+                // 确保version中level > 0的文件有序
                 version.assertNoOverlappingFiles();
-                //#endif
             }
         }
 
+        /**
+         * 该函数尝试将fileMetaData加入到levels[level]文件set中。
+         * 要满足两个条件：
+         * 1. 文件不能被删除，也就是不能在levels[level].deleted_files集合中；
+         * 2. 保证文件之间的key是连续的，即基于比较器versionSet.internalKeyComparator，
+         *    fileMetaData的smallest要大于levels[level]集合中最后一个文件的larges；
+         * @param version
+         * @param level
+         * @param fileMetaData
+         * @throws IOException
+         */
         private void maybeAddFile(Version version, int level, FileMetaData fileMetaData)
                 throws IOException
         {
             if (levels.get(level).deletedFiles.contains(fileMetaData.getNumber())) {
-                // File is deleted: do nothing
+                // 如果文件已经被删除了，则什么都不需要做了
             }
             else {
                 List<FileMetaData> files = version.getFiles(level);
                 if (level > 0 && !files.isEmpty()) {
-                    // Must not overlap
+                    // 保证key的连续性
                     boolean filesOverlap = versionSet.internalKeyComparator.compare(files.get(files.size() - 1).getLargest(), fileMetaData.getSmallest()) >= 0;
                     if (filesOverlap) {
-                        // A memory compaction, while this compaction was running, resulted in a a database state that is
-                        // incompatible with the compaction.  This is rare and expensive to detect while the compaction is
-                        // running, so we catch here simply discard the work.
                         throw new IOException(String.format("Compaction is obsolete: Overlapping files %s and %s in level %s",
                                 files.get(files.size() - 1).getNumber(),
                                 fileMetaData.getNumber(), level));
@@ -782,7 +809,7 @@ public class VersionSet
                 version.addFile(level, fileMetaData);
             }
         }
-
+        // 文件比较类，首先依照文件的min key，小的在前；如果min key相等则file number小的在前。
         private static class FileMetaDataBySmallestKey
                 implements Comparator<FileMetaData>
         {
@@ -803,14 +830,18 @@ public class VersionSet
                         .result();
             }
         }
-
+        /**
+         * 记录添加和删除的文件
+         */
         private static class LevelState
         {
+            // 保证添加文件的顺序是有效定义的
             private final SortedSet<FileMetaData> addedFiles;
             private final Set<Long> deletedFiles = new HashSet<Long>();
-
+            // 构造函数创建比较类
             public LevelState(InternalKeyComparator internalKeyComparator)
             {
+                // 比较类FileMetaDataBySmallestKey
                 addedFiles = new TreeSet<FileMetaData>(new FileMetaDataBySmallestKey(internalKeyComparator));
             }
 

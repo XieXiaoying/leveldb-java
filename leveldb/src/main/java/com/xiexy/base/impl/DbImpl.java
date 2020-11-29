@@ -7,7 +7,9 @@ import com.xiexy.base.db.MemTable;
 import com.xiexy.base.db.Slices;
 import com.xiexy.base.include.Slice;
 import com.xiexy.base.include.SliceInput;
+import com.xiexy.base.include.SliceOutput;
 import com.xiexy.base.table.BytewiseComparator;
+import com.xiexy.base.table.CustomUserComparator;
 import com.xiexy.base.table.TableBuilder;
 import com.xiexy.base.table.UserComparator;
 import com.xiexy.base.utils.Snappy;
@@ -22,10 +24,13 @@ import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.ReentrantLock;
+import com.xiexy.base.impl.WriteBatchImpl.Handler;
 
 import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkState;
+import static com.xiexy.base.db.Slices.writeLengthPrefixedBytes;
 import static com.xiexy.base.impl.ValueType.DELETION;
+import static com.xiexy.base.impl.ValueType.VALUE;
 import static com.xiexy.base.utils.DataUnit.INT_UNIT;
 import static com.xiexy.base.utils.DataUnit.LONG_UNIT;
 import static java.util.Objects.requireNonNull;
@@ -66,13 +71,13 @@ public class DbImpl
         this.options = options;
 
         if (this.options.compressionType() == CompressionType.SNAPPY && !Snappy.available()) {
-            // Disable snappy if it's not available.
+            // 如果不支持SNAPPY压缩，则采取不压缩的方式
             this.options.compressionType(CompressionType.NONE);
         }
 
         this.databaseDir = databaseDir;
 
-        //use custom comparator if set
+        // 如果已经指定了comparator，就使用CustomUserComparator
         DBComparator comparator = options.comparator();
         UserComparator userComparator;
         if (comparator != null) {
@@ -92,7 +97,7 @@ public class DbImpl
                     @Override
                     public void uncaughtException(Thread t, Throwable e)
                     {
-                        // todo need a real UncaughtExceptionHandler
+
                         System.out.printf("%s%n", t);
                         e.printStackTrace();
                     }
@@ -100,7 +105,8 @@ public class DbImpl
                 .build();
         compactionExecutor = Executors.newSingleThreadExecutor(compactionThreadFactory);
 
-        // Reserve ten files or so for other uses and give the rest to TableCache.
+        // 在函数体中，创建TableCache和VersionSet。
+        // 为其他预留10个文件，其余的都给TableCache.
         int tableCacheSize = options.maxOpenFiles() - 10;
         tableCache = new TableCache(databaseDir, tableCacheSize, new InternalUserComparator(internalKeyComparator), options.verifyChecksums());
 
@@ -110,13 +116,13 @@ public class DbImpl
         databaseDir.mkdirs();
         checkArgument(databaseDir.exists(), "Database directory '%s' does not exist and could not be created", databaseDir);
         checkArgument(databaseDir.isDirectory(), "Database directory '%s' is not a directory", databaseDir);
-
+        // 采用ReentrantLock对文件加锁
         mutex.lock();
         try {
-            // lock the database dir
+            // 对目录下对文件加锁
             dbLock = new DbLock(new File(databaseDir, Filename.lockFileName()));
 
-            // verify the "current" file
+            // 创建CURRENT文件
             File currentFile = new File(databaseDir, Filename.currentFileName());
             if (!currentFile.canRead()) {
                 checkArgument(options.createIfMissing(), "Database '%s' does not exist and the create if missing option is disabled", databaseDir);
@@ -125,9 +131,10 @@ public class DbImpl
                 checkArgument(!options.errorIfExists(), "Database '%s' exists and the error if exists option is enabled", databaseDir);
             }
 
+            // 初始化VersionSet
             versions = new VersionSet(databaseDir, tableCache, internalKeyComparator);
 
-            // load  (and recover) current version
+            // 安装当前版本
             versions.recover();
 
             // Recover from all newer log files than the ones named in the
@@ -143,10 +150,10 @@ public class DbImpl
 
             List<Long> logs = new ArrayList<>();
             for (File filename : filenames) {
-                FileInfo fileInfo = Filename.parseFileName(filename);
+                Filename.FileInfo fileInfo = Filename.parseFileName(filename);
 
                 if (fileInfo != null &&
-                        fileInfo.getFileType() == FileType.LOG &&
+                        fileInfo.getFileType() == Filename.FileType.LOG &&
                         ((fileInfo.getFileNumber() >= minLogNumber) || (fileInfo.getFileNumber() == previousLogNumber))) {
                     logs.add(fileInfo.getFileNumber());
                 }
@@ -237,7 +244,7 @@ public class DbImpl
         }
 
         for (File file : Filename.listFiles(databaseDir)) {
-            FileInfo fileInfo = Filename.parseFileName(file);
+            Filename.FileInfo fileInfo = Filename.parseFileName(file);
             if (fileInfo == null) {
                 continue;
             }
@@ -269,7 +276,7 @@ public class DbImpl
             }
 
             if (!keep) {
-                if (fileInfo.getFileType() == FileType.TABLE) {
+                if (fileInfo.getFileType() == Filename.FileType.TABLE) {
                     tableCache.evict(number);
                 }
                 // todo info logging system needed
@@ -536,7 +543,6 @@ public class DbImpl
             SnapshotImpl snapshot = getSnapshot(options);
             lookupKey = new LookupKey(Slices.wrappedBuffer(key), snapshot.getLastSequence());
 
-            // First look in the memtable, then in the immutable memtable (if any).
             LookupResult lookupResult = memTable.get(lookupKey);
             if (lookupResult != null) {
                 Slice value = lookupResult.getValue();
@@ -560,10 +566,8 @@ public class DbImpl
             mutex.unlock();
         }
 
-        // Not in memTables; try live files in level order
         LookupResult lookupResult = versions.get(lookupKey);
 
-        // schedule compaction if necessary
         mutex.lock();
         try {
             if (versions.needsCompaction()) {
@@ -635,11 +639,12 @@ public class DbImpl
             if (updates.size() != 0) {
                 makeRoomForWrite(false);
 
-                // Get sequence numbers for this change set
+                // 获取last sequence
                 long sequenceBegin = versions.getLastSequence() + 1;
+                // updates.size指的是key-value对
                 sequenceEnd = sequenceBegin + updates.size() - 1;
 
-                // Reserve this sequence in the version set
+                // 修改version的last sequence
                 versions.setLastSequence(sequenceEnd);
 
                 // Log write
@@ -651,7 +656,7 @@ public class DbImpl
                     throw Throwables.propagate(e);
                 }
 
-                // Update memtable
+                // 更新 memtable
                 updates.forEach(new InsertIntoHandler(memTable, sequenceBegin));
             }
             else {

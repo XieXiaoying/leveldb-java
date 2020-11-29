@@ -29,7 +29,7 @@ public final class LevelIterator
     @Override
     protected void seekToFirstInternal()
     {
-        // reset index to before first and clear the data iterator
+        //
         index = 0;
         current = null;
     }

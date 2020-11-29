@@ -17,6 +17,9 @@ import static java.util.Objects.requireNonNull;
  * 2. <dbname>/[0-9]+.sst：db的sstable文件
  * 3. <dbname>/MANIFEST-[0-9]+：DB元信息文件
  * 4. <dbname>/CURRENT：记录当前正在使用的Manifest文件
+ *  它的内容就是当前的manifest文件名；因为在LevleDb的运行过程中，随着Compaction的进行，新的SSTable文件被产生，老的文件被废弃。
+ *  并生成新的Manifest文件来记载sstable的变动，而CURRENT则用来记录我们关心的Manifest文件。
+ *  当db被重新打开时，leveldb总是生产一个新的manifest文件。Manifest文件使用log的格式，对服务状态的改变（新加或删除的文件）都会追加到该log中。
  * 5. <dbname>/log：系统的运行日志，记录系统的运行信息或者错误日志。
  * 6. <dbname>/dbtmp：临时数据库文件，repair时临时生成的。
  */
@@ -54,7 +57,7 @@ public final class Filename
     }
 
     /**
-     * Return the name of the descriptor file with the specified incarnation number.
+     * 它记录的是leveldb的元信息，比如DB使用的Comparator名，以及各SSTable文件的管理信息：如Level层数、文件名、最小key和最大key等等。
      */
     public static String descriptorFileName(long number)
     {
@@ -63,7 +66,7 @@ public final class Filename
     }
 
     /**
-     * Return the name of the current file.
+     * 返回当前文件的名称
      */
     public static String currentFileName()
     {
@@ -79,7 +82,7 @@ public final class Filename
     }
 
     /**
-     * 返回临时文件名称
+     * 返回临时文件名称[0-9].dbtmp
      */
     public static String tempFileName(long number)
     {
@@ -149,23 +152,27 @@ public final class Filename
     }
 
     /**
-     * Make the CURRENT file point to the descriptor file with the
-     * specified number.
+     * 使得CURRENT指向descriptorNumber代表的文件
      *
      * @return true if successful; false otherwise
      */
     public static boolean setCurrentFile(File databaseDir, long descriptorNumber)
             throws IOException
     {
+        // manifest为依据descriptorNumber生成的文件名:MANIFEST-[0-9]
         String manifest = descriptorFileName(descriptorNumber);
+        // temp:[0-9].dbtmp
         String temp = tempFileName(descriptorNumber);
-
+        // 创建临时文件
         File tempFile = new File(databaseDir, temp);
+        // 将MANIFEST-[0-9]写入文件名为：temp的文件
         writeStringToFileSync(manifest + "\n", tempFile);
 
         File to = new File(databaseDir, currentFileName());
+        // 替换CURRENT文件内容
         boolean ok = tempFile.renameTo(to);
         if (!ok) {
+            // 如果没有替换成功，则删除掉新创建的文件
             tempFile.delete();
             writeStringToFileSync(manifest + "\n", to);
         }

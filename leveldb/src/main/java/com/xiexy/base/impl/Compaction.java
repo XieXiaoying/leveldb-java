@@ -16,7 +16,7 @@ public class Compaction
     private final Version inputVersion;
     private final int level;
 
-    // Each compaction reads inputs from "level" and "level+1"
+    // 每次压缩都要从 "level" 、 "level+1"甚至 "level+2"
     private final List<FileMetaData> levelInputs;
     private final List<FileMetaData> levelUpInputs;
     private final List<FileMetaData> grandparents;
@@ -25,7 +25,7 @@ public class Compaction
     private final long maxOutputFileSize;
     private final VersionEdit edit = new VersionEdit();
 
-    // State used to check for number of of overlapping grandparent files
+    // 判读和level1、level2重叠的数据的状态变量
     // (parent == level_ + 1, grandparent == level_ + 2)
 
     // Index in grandparent_starts_
@@ -76,7 +76,7 @@ public class Compaction
         return edit;
     }
 
-    // Return the ith input file at "level()+which" ("which" must be 0 or 1).
+    // 返回第which层的第i个文件
     public FileMetaData input(int which, int i)
     {
         checkArgument(which == 0 || which == 1, "which must be either 0 or 1");
@@ -88,25 +88,32 @@ public class Compaction
         }
     }
 
-    // Maximum size of files to build during this compaction.
+    // 返回压缩过程个最大的文件size
     public long getMaxOutputFileSize()
     {
         return maxOutputFileSize;
     }
 
-    // Is this a trivial compaction that can be implemented by just
-    // moving a single input file to the next level (no merging or splitting)
+    /**
+     * 假设0层文件完成合并之后，1层文件同时达到了数据上限，同时需要进行合并。
+     * 更加糟糕的是，在最差的情况下，0-n层的文件同时达到了合并的条件，每一层都需要进行合并。
+     *
+     * @return 是否要上移levelInputs
+     */
     public boolean isTrivialMove()
     {
-        // Avoid a move if there is lots of overlapping grandparent data.
-        // Otherwise, the move could create a parent file that will require
-        // a very expensive merge later on.
+        /**
+         * levelInputs层的文件个数只有一个；
+         * 1. levelInputs层文件与levelInputs+1层文件没有重叠；
+         * 2. levelInputs层文件与levelInputs+2层的文件重叠部分不超过10个文件；
+         * 3. 当满足这几个条件时，可以将levelInputs层的该文件直接移至slevelInputs+1层
+         */
         return (levelInputs.size() == 1 &&
                 levelUpInputs.isEmpty() &&
                 totalFileSize(grandparents) <= MAX_GRAND_PARENT_OVERLAP_BYTES);
 
     }
-
+    // 返回参数文件第总size
     public static long totalFileSize(List<FileMetaData> files)
     {
         long sum = 0;
@@ -116,7 +123,7 @@ public class Compaction
         return sum;
     }
 
-    // Add all inputs to this compaction as delete operations to *edit.
+    // 将所有合并过的文件都在version中记录为删除
     public void addInputDeletions(VersionEdit edit)
     {
         for (FileMetaData input : levelInputs) {
@@ -132,7 +139,6 @@ public class Compaction
     // in levels greater than "level+1".
     public boolean isBaseLevelForKey(Slice userKey)
     {
-        // Maybe use binary search to find right entry instead of linear search?
         UserComparator userComparator = inputVersion.getInternalKeyComparator().getUserComparator();
         for (int level = this.level + 2; level < NUM_LEVELS; level++) {
             List<FileMetaData> files = inputVersion.getFiles(level);

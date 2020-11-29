@@ -7,7 +7,7 @@ public final class DbConstants
 
 
     /**
-     * Max number of levels
+     * db的最大层数为7
      */
     public static final int NUM_LEVELS = 7;
 

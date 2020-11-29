@@ -65,6 +65,8 @@ public class Level
         }
 
         List<FileMetaData> fileMetaDataList = new ArrayList<>(files.size());
+        // level0 内的.sst文件，两个文件可能存在key重叠，所以需要遍历level0内的sst，找到要查找的key在sst内的所有sst
+        // 如果不是level0 内的.sst文件，key不存在重叠，就可以直接二分
         if (levelNumber == 0) {
             for (FileMetaData fileMetaData : files) {
                 if (internalKeyComparator.getUserComparator().compare(key.getUserKey(), fileMetaData.getSmallest().getUserKey()) >= 0 &&
@@ -74,21 +76,21 @@ public class Level
             }
         }
         else {
-            // Binary search to find earliest index whose largest key >= ikey.
+            // 二分查找最小的 key >= ikey的文件
             int index = ceilingEntryIndex(Lists.transform(files, FileMetaData::getLargest), key.getInternalKey(), internalKeyComparator);
 
-            // did we find any files that could contain the key?
+            // 如果已经找到了文件最后，都没找到，说明sstable中不包含key
             if (index >= files.size()) {
                 return null;
             }
 
-            // check if the smallest user key in the file is less than the target user key
+            // 验证文件的最小key是不是大于key
             FileMetaData fileMetaData = files.get(index);
             if (internalKeyComparator.getUserComparator().compare(key.getUserKey(), fileMetaData.getSmallest().getUserKey()) < 0) {
                 return null;
             }
 
-            // search this file
+            // 将该文件添加到带查找列表
             fileMetaDataList.add(fileMetaData);
         }
 
@@ -97,7 +99,7 @@ public class Level
         readStats.clear();
         for (FileMetaData fileMetaData : fileMetaDataList) {
             if (lastFileRead != null && readStats.getSeekFile() == null) {
-                // We have had more than one seek for this read.  Charge the first file.
+                // 记录第一个文件的信息
                 readStats.setSeekFile(lastFileRead);
                 readStats.setSeekFileLevel(lastFileReadLevel);
             }
@@ -105,19 +107,21 @@ public class Level
             lastFileRead = fileMetaData;
             lastFileReadLevel = levelNumber;
 
-            // open the iterator
+            // 根据fileMetaData中的file number，从tableCache中获得对应的table的iterator
             InternalTableIterator iterator = tableCache.newIterator(fileMetaData);
 
-            // seek to the key
+            // 在table中指向 >= lookup key的第一个key
             iterator.seek(key.getInternalKey());
 
             if (iterator.hasNext()) {
-                // parse the key in the block
+                // 解析出block中的key
                 Map.Entry<InternalKey, Slice> entry = iterator.next();
                 InternalKey internalKey = entry.getKey();
                 checkState(internalKey != null, "Corrupt key for %s", key.getUserKey().toString(UTF_8));
 
-                // if this is a value key (not a delete) and the keys match, return the value
+                // 如果找到了key
+                //  1. valuetype是value，那么返回LookupResult
+                //  1. valuetype是delete，那么返回LookupResult
                 if (key.getUserKey().equals(internalKey.getUserKey())) {
                     if (internalKey.getValueType() == ValueType.DELETION) {
                         return LookupResult.deleted(key);

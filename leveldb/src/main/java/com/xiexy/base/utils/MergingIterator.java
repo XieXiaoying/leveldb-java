@@ -5,6 +5,9 @@ import com.xiexy.base.include.Slice;
 
 import java.util.*;
 
+/**
+ * MergingIterator主要是用于合并的。
+ */
 public final class MergingIterator
         extends AbstractSeekingIterator<InternalKey, Slice>
 {
@@ -24,6 +27,8 @@ public final class MergingIterator
     @Override
     protected void seekToFirstInternal()
     {
+        // 移到该层文件头的位置
+
         for (InternalIterator level : levels) {
             level.seekToFirst();
         }
@@ -39,16 +44,21 @@ public final class MergingIterator
         resetPriorityQueue(comparator);
     }
 
+    // 重置每一层level的元素到Comparator
+    // 注意这里从level 1 开始
     private void resetPriorityQueue(Comparator<InternalKey> comparator)
     {
         int i = 1;
         for (InternalIterator level : levels) {
             if (level.hasNext()) {
+                // level.next()指向的是MemTableIterator中的key-value
+                // ComparableIterator的排序是按照nextElement.key 和 ordinal排序的，越新的数据ordinal越小
+                // 用一个小根堆实现了多层元素的排序，妙啊！
                 priorityQueue.add(new ComparableIterator(level, comparator, i++, level.next()));
             }
         }
     }
-
+    // NextElement一定是这几层中key最小的元素
     @Override
     protected Map.Entry<InternalKey, Slice> getNextElement()
     {
@@ -149,6 +159,7 @@ public final class MergingIterator
             return result;
         }
 
+        // ComparableIterator的排序是按照nextElement.key 和 ordinal排序的，越新的数据ordinal越小
         @Override
         public int compareTo(ComparableIterator that)
         {

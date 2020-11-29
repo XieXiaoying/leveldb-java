@@ -23,6 +23,10 @@ import static com.xiexy.base.impl.SequenceNumber.MAX_SEQUENCE_NUMBER;
 import static com.xiexy.base.impl.VersionSet.MAX_GRAND_PARENT_OVERLAP_BYTES;
 import static java.util.Objects.requireNonNull;
 
+/**
+ * leveldb对单版本的sstable文件管理，主要集中在Version类中。
+ * Version不会修改其管理的sstable文件，只有读取操作。
+ */
 public class Version
         implements SeekingIterable<InternalKey, Slice>
 {
@@ -60,6 +64,10 @@ public class Version
         }
     }
 
+    /**
+     * 保证level>0的文件集合无重叠，基于vset_->icmp_，确保文件i-1的max key < 文件i的min key。
+     *
+     */
     public void assertNoOverlappingFiles(int level)
     {
         if (level > 0) {
@@ -143,9 +151,7 @@ public class Version
 
     public LookupResult get(LookupKey key)
     {
-        // We can search level-by-level since entries never hop across
-        // levels.  Therefore we are guaranteed that if we find data
-        // in an smaller level, later levels are irrelevant.
+        // 首先从level 0 找，找不到的话，一层一层往下找
         ReadStats readStats = new ReadStats();
         LookupResult lookupResult = level0.get(key, readStats);
         if (lookupResult == null) {

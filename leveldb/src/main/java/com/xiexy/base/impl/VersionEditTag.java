@@ -1,6 +1,7 @@
 package com.xiexy.base.impl;
 
 import com.xiexy.base.include.SliceInput;
+import com.xiexy.base.include.SliceOutput;
 
 import java.util.Map;
 
