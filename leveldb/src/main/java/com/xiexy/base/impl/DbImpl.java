@@ -887,18 +887,18 @@ public class DbImpl
             backgroundCondition.signalAll();
         }
     }
-
+    // Minor Compaction将memtable生成一个level 0文件
     private void writeLevel0Table(MemTable mem, VersionEdit edit, Version base)
             throws IOException
     {
         checkState(mutex.isHeldByCurrentThread());
 
-        // skip empty mem table
+        // 跳过空的memtable
         if (mem.isEmpty()) {
             return;
         }
 
-        // write the memtable to a new sstable
+        // 产生一个新的file number，用于产生新的sstable
         long fileNumber = versions.getNextFileNumber();
         pendingOutputs.add(fileNumber);
         mutex.unlock();
@@ -909,6 +909,7 @@ public class DbImpl
         finally {
             mutex.lock();
         }
+        // 创建成功后，移除任务
         pendingOutputs.remove(fileNumber);
 
         // Note that if file size is zero, the file has been deleted and
