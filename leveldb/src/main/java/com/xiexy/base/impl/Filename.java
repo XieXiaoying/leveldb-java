@@ -106,9 +106,9 @@ public final class Filename
     }
 
     /**
-     * If filename is a leveldb file, store the type of the file in *type.
-     * The number encoded in the filename is stored in *number.  If the
-     * filename was successfully parsed, returns true.  Else return false.
+     * 将文件解析为FileInfo格式
+     *
+     * leveldb的文件名都有固定格式的，根据文件获得FileInfo,FileInfo包含文件类型和fileNumber
      */
     public static FileInfo parseFileName(File file)
     {
@@ -191,6 +191,7 @@ public final class Filename
 
     public static List<File> listFiles(File dir)
     {
+        // listFiles()是获取该目录下所有文件和目录的绝对路径
         File[] files = dir.listFiles();
         if (files == null) {
             return ImmutableList.of();

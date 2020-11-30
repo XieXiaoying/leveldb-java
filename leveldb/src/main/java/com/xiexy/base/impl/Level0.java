@@ -120,7 +120,7 @@ public class Level0
 
         UserComparator userComparator = internalKeyComparator.getUserComparator();
         return ((index < files.size()) &&
-                userComparator.compare(largestUserKey, files.get(index).getSmallest().getUserKey()) >= 0);
+                userComparator.compare(largestUserKey, files.get(index).getLargest().getUserKey()) >= 0);
     }
 
     // 二分查找targetkey所在的文件

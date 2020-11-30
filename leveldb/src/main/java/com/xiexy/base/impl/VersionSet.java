@@ -45,6 +45,16 @@ public class VersionSet
     public static final long MAX_GRAND_PARENT_OVERLAP_BYTES = 10 * TARGET_FILE_SIZE;
     // nextFileNumber从2开始
     private final AtomicLong nextFileNumber = new AtomicLong(2);
+    /**
+     * 一个Manifest文件中，包含了多条Session Record。一个Session Record记录了从上一个版本至该版本的变化情况。
+     * 变化情况大致包括：
+     * （1）新增了哪些sstable文件；
+     * （2）删除了哪些sstable文件（由于compaction导致）；
+     * （3）最新的journal日志文件标号等；
+     * 借助这个Manifest文件，leveldb启动时，可以根据一个初始的版本状态，不断地应用这些版本改动，使得系统的版本信息恢复到最近一次使用的状态。
+     * 一个Manifest内部包含若干条Session Record，其中第一条Session Record记载了当时leveldb的全量版本信息，
+     * 其余若干条Session Record仅记录每次更迭的变化情况。
+     */
     private long manifestFileNumber = 1;
     // 当前version
     private Version current;
@@ -89,7 +99,9 @@ public class VersionSet
             // 创建可以写的文件
             LogWriter log = Logs.createLogWriter(new File(databaseDir, Filename.descriptorFileName(manifestFileNumber)), manifestFileNumber);
             try {
+                // 第一条包括leveldb全量信息
                 writeSnapshot(log);
+                // 这些记录了每次更迭的变化情况
                 log.addRecord(edit.encode(), false);
             }
             finally {
@@ -301,7 +313,17 @@ public class VersionSet
     }
 
     /**
-     * 把current version保存到log中，信息包括comparator名字、compaction点和各级sstable文件，函数逻辑很直观。
+     * 通常用作写manifest文件的第一条记录，通常包括
+     * 1. Comparator的名称；
+     * 2. 最新的journal文件编号；
+     * 3. 下一个可以使用的文件编号；
+     * 4. 数据库已经持久化数据项中最大的sequence number；
+     * 5. 新增的文件信息；
+     * 6. 删除的文件信息；
+     * 7. compaction记录信息；
+     *
+     * 或者用于把current version保存到log中，信息包括comparator名字、compaction点和各级sstable文件，函数逻辑很直观。
+     *
      * @param log
      * @throws IOException
      */
@@ -454,7 +476,7 @@ public class VersionSet
         }
         return null;
     }
-    // 获取函数，把所有version的所有level的文件加入到@live中
+    // 获取函数，把所有version的所有level的文件加入到live中
     public List<FileMetaData> getLiveFiles()
     {
         ImmutableList.Builder<FileMetaData> builder = ImmutableList.builder();

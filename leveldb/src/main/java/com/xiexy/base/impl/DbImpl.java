@@ -12,6 +12,7 @@ import com.xiexy.base.table.BytewiseComparator;
 import com.xiexy.base.table.CustomUserComparator;
 import com.xiexy.base.table.TableBuilder;
 import com.xiexy.base.table.UserComparator;
+import com.xiexy.base.utils.MergingIterator;
 import com.xiexy.base.utils.Snappy;
 
 import java.io.*;
@@ -29,6 +30,7 @@ import com.xiexy.base.impl.WriteBatchImpl.Handler;
 import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkState;
 import static com.xiexy.base.db.Slices.writeLengthPrefixedBytes;
+import static com.xiexy.base.impl.DbConstants.*;
 import static com.xiexy.base.impl.ValueType.DELETION;
 import static com.xiexy.base.impl.ValueType.VALUE;
 import static com.xiexy.base.utils.DataUnit.INT_UNIT;
@@ -233,11 +235,14 @@ public class DbImpl
         return null;
     }
 
+    /**
+     * 删除无引用的文件
+     */
     private void deleteObsoleteFiles()
     {
         checkState(mutex.isHeldByCurrentThread());
 
-        // Make a set of all of the live files
+        // 所有sstable文件集
         List<Long> live = new ArrayList<>(this.pendingOutputs);
         for (FileMetaData fileMetaData : versions.getLiveFiles()) {
             live.add(fileMetaData.getNumber());
@@ -256,16 +261,12 @@ public class DbImpl
                             (number == versions.getPrevLogNumber()));
                     break;
                 case DESCRIPTOR:
-                    // Keep my manifest file, and any newer incarnations'
-                    // (in case there is a race that allows other incarnations)
                     keep = (number >= versions.getManifestFileNumber());
                     break;
                 case TABLE:
                     keep = live.contains(number);
                     break;
                 case TEMP:
-                    // Any temp files that are currently being written to must
-                    // be recorded in pending_outputs_, which is inserted into "live"
                     keep = live.contains(number);
                     break;
                 case CURRENT:
@@ -280,9 +281,6 @@ public class DbImpl
                     tableCache.evict(number);
                 }
                 // todo info logging system needed
-//                Log(options_.info_log, "Delete type=%d #%lld\n",
-//                int(type),
-//                        static_cast < unsigned long long>(number));
                 file.delete();
             }
         }
@@ -333,15 +331,18 @@ public class DbImpl
 
     }
 
+    /**
+     * 判断后台线程是否已经启动和一些其他的错误判断，如果未启动则启动后台compaction线程
+     */
     private void maybeScheduleCompaction()
     {
         checkState(mutex.isHeldByCurrentThread());
 
         if (backgroundCompaction != null) {
-            // Already scheduled
+            // 已经在后台执行compact
         }
         else if (shuttingDown.get()) {
-            // DB is being shutdown; no more background compactions
+            // DB 已经被关闭了
         }
         else if (immutableMemTable == null &&
                 manualCompaction == null &&
@@ -356,6 +357,7 @@ public class DbImpl
                         throws Exception
                 {
                     try {
+                        // 启动后台compact线程
                         backgroundCall();
                     }
                     catch (DatabaseShutdownException ignored) {
@@ -377,6 +379,10 @@ public class DbImpl
         }
     }
 
+    /**
+     * 启动后台compact线程
+     * @throws IOException
+     */
     private void backgroundCall()
             throws IOException
     {
@@ -397,8 +403,7 @@ public class DbImpl
         }
         finally {
             try {
-                // Previous compaction may have produced too many files in a level,
-                // so reschedule another compaction if needed.
+                // 如果之前的compact产生了太多文件的话，就在这里再进行一次compact
                 maybeScheduleCompaction();
             }
             finally {
@@ -412,6 +417,7 @@ public class DbImpl
         }
     }
 
+    // compact的核心实现
     private void backgroundCompaction()
             throws IOException
     {
@@ -768,19 +774,14 @@ public class DbImpl
         boolean allowDelay = !force;
 
         while (true) {
-            // todo background processing system need work
-//            if (!bg_error_.ok()) {
-//              // Yield previous error
-//              s = bg_error_;
-//              break;
-//            } else
+
             if (allowDelay && versions.numberOfFilesInLevel(0) > L0_SLOWDOWN_WRITES_TRIGGER) {
-                // We are getting close to hitting a hard limit on the number of
-                // L0 files.  Rather than delaying a single write by several
-                // seconds when we hit the hard limit, start delaying each
-                // individual write by 1ms to reduce latency variance.  Also,
-                // this delay hands over some CPU to the compaction thread in
-                // case it is sharing the same core as the writer.
+                /**
+                 * 当L0的文件数量要达到阈值的时候，我们每次写入都延迟1ms，
+                 * 这样可以为后台的compaction腾出一定的cpu（当后台compaction
+                 * 和当前线程是使用的一个内核的时候）这样可以降低写入延迟的方差
+                 * 因为延迟被分摊到多个写上面，而不是在几个甚至一个写的时候
+                 */
                 try {
                     mutex.unlock();
                     Thread.sleep(1);
@@ -793,28 +794,32 @@ public class DbImpl
                     mutex.lock();
                 }
 
-                // Do not delay a single write more than once
+                // 每次写只允许延迟一次
                 allowDelay = false;
             }
             else if (!force && memTable.approximateMemoryUsage() <= options.writeBufferSize()) {
-                // There is room in current memtable
+                // 当前memtable的占用量未达到阈值
                 break;
             }
             else if (immutableMemTable != null) {
-                // We have filled up the current memtable, but the previous
-                // one is still being compacted, so we wait.
+                /**
+                 * 上一次memtable的compaction尚未结束，等待后台compaction完成
+                 * 因为compaction的过程为 mem ->immutableMemTable 完成后删除immutableMemTable
+                 *
+                 * 线程在调用condition.await()后处于await状态，此时调用thread.interrupt()会报错
+                 * 但是使用condition.awaitUninterruptibly()后，调用thread.interrupt(0则不会报错
+                 */
                 backgroundCondition.awaitUninterruptibly();
             }
             else if (versions.numberOfFilesInLevel(0) >= L0_STOP_WRITES_TRIGGER) {
-                // There are too many level-0 files.
-//                Log(options_.info_log, "waiting...\n");
+                // level 0的文件数量超过阈值，等待后台compaction完成
                 backgroundCondition.awaitUninterruptibly();
             }
             else {
-                // Attempt to switch to a new memtable and trigger compaction of old
+                // memtable达到阈值，新生成日志和memtable，并将原先的mem转化为imm给后台compact
                 checkState(versions.getPrevLogNumber() == 0);
 
-                // close the existing log
+                // 关闭现在的log文件
                 try {
                     log.close();
                 }
@@ -822,7 +827,7 @@ public class DbImpl
                     throw new RuntimeException("Unable to close log file " + log.getFile(), e);
                 }
 
-                // open a new log
+                // 打开一个新的log文件
                 long logNumber = versions.getNextFileNumber();
                 try {
                     this.log = Logs.createLogWriter(new File(databaseDir, Filename.logFileName(logNumber)), logNumber);
@@ -832,13 +837,13 @@ public class DbImpl
                             new File(databaseDir, Filename.logFileName(logNumber)).getAbsoluteFile(), e);
                 }
 
-                // create a new mem table
+                // 将当前的memtable赋值给immutableMemTable，新建memTable
                 immutableMemTable = memTable;
                 memTable = new MemTable(internalKeyComparator);
 
                 // Do not force another compaction there is space available
                 force = false;
-
+                //触发后台compaction
                 maybeScheduleCompaction();
             }
         }
@@ -856,16 +861,21 @@ public class DbImpl
         }
     }
 
+    /**
+     * immutableMemTable转换为sstable
+     * @throws IOException
+     */
     private void compactMemTableInternal()
             throws IOException
     {
         checkState(mutex.isHeldByCurrentThread());
+        // 如果immutableMemTable不存在，则直接返回
         if (immutableMemTable == null) {
             return;
         }
 
         try {
-            // Save the contents of the memtable as a new Table
+            // 将immutableMemTable转换为sstable
             VersionEdit edit = new VersionEdit();
             Version base = versions.getCurrent();
             writeLevel0Table(immutableMemTable, edit, base);
@@ -874,7 +884,7 @@ public class DbImpl
                 throw new DatabaseShutdownException("Database shutdown during memtable compaction");
             }
 
-            // Replace immutable memtable with the generated Table
+            // 替换immutableMemTable
             edit.setPreviousLogNumber(0);
             edit.setLogNumber(log.getFileNumber());  // Earlier logs no longer needed
             versions.logAndApply(edit);
@@ -884,6 +894,7 @@ public class DbImpl
             deleteObsoleteFiles();
         }
         finally {
+            // 唤醒所有的等待线程
             backgroundCondition.signalAll();
         }
     }
@@ -985,10 +996,10 @@ public class DbImpl
         checkArgument(compactionState.builder == null);
         checkArgument(compactionState.outfile == null);
 
-        // todo track snapshots
+        // 将snapshot相关的内容记录到compact信息中
         compactionState.smallestSnapshot = versions.getLastSequence();
 
-        // Release mutex while we're actually doing the compaction work
+        // 加锁
         mutex.unlock();
         try {
             MergingIterator iterator = versions.makeInputIterator(compactionState.compaction);

@@ -154,7 +154,7 @@ public class Level
 
         UserComparator userComparator = internalKeyComparator.getUserComparator();
         return ((index < files.size()) &&
-                userComparator.compare(largestUserKey, files.get(index).getSmallest().getUserKey()) >= 0);
+                userComparator.compare(largestUserKey, files.get(index).getLargest().getUserKey()) >= 0);
     }
 
     private int findFile(InternalKey targetKey)

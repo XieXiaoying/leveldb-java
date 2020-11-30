@@ -35,7 +35,7 @@ public class Version
     private final Level0 level0;
     private final List<Level> levels;
 
-    // move these mutable fields somewhere else
+    // 合并层数和分数
     private int compactionLevel;
     private double compactionScore;
     private FileMetaData fileToCompact;

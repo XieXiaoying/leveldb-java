@@ -17,12 +17,12 @@ public final class DbConstants
     public static final int L0_COMPACTION_TRIGGER = 4;
 
     /**
-     * Soft limit on number of level-0 files.  We slow down writes at this point.
+     * level 0 文件的数量达到下述值的时候，写入的时候增加1ms的延时
      */
     public static final int L0_SLOWDOWN_WRITES_TRIGGER = 8;
 
     /**
-     * Maximum number of level-0 files.  We stop writes at this point.
+     * level 0 层文件的最大数量
      */
     public static final int L0_STOP_WRITES_TRIGGER = 12;
 
